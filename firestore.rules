@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cualquier persona con la app autenticada (aunque sea de forma anónima,
+    // que es como queda configurada esta app) puede leer y escribir.
+    // Esto evita que gente fuera de la app toque tus datos, pero como
+    // todos los meseros comparten el mismo acceso, no distingue "quién" hizo qué
+    // a nivel de permisos (eso se controla por el nombre que cada uno escribe
+    // en el formulario, no por login individual).
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
