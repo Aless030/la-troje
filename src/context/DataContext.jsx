@@ -94,6 +94,19 @@ export function DataProvider({ children }) {
     });
   }
 
+  async function eliminarCierre(id) {
+    await deleteDoc(doc(db, "cierres", id));
+  }
+
+  // Borra los cierres con más de `diasAntiguedad` días (30 por defecto = 1 mes).
+  // Se llama solo cuando el usuario lo pide explícitamente desde Cierre de caja.
+  async function limpiarCierresAntiguos(diasAntiguedad = 30) {
+    const limite = Date.now() - diasAntiguedad * 24 * 60 * 60 * 1000;
+    const antiguos = cierres.filter((c) => new Date(c.fecha).getTime() < limite);
+    await Promise.all(antiguos.map((c) => deleteDoc(doc(db, "cierres", c.id))));
+    return antiguos.length;
+  }
+
   async function registrarMovimiento(mov) {
     await addDoc(collection(db, "movimientos"), {
       ...mov,
@@ -128,6 +141,8 @@ export function DataProvider({ children }) {
     eliminarProducto,
     registrarVenta,
     registrarCierre,
+    eliminarCierre,
+    limpiarCierresAntiguos,
     registrarMovimiento,
     registrarIngreso,
     registrarGasto,

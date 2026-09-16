@@ -2,6 +2,22 @@ import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { descargarPDF } from "../utils/pdf";
 
+const ETIQUETAS_DIA = {
+  jueves: "Jueves",
+  viernes: "Viernes",
+  sabado: "Sábado",
+  otro: "Otro",
+};
+
+// Jueves=4, viernes=5, sábado=6 en getDay(). Cualquier otro día cae en "otro".
+function diaSemanaDesdeFecha(fechaIso) {
+  const dia = new Date(fechaIso).getDay();
+  if (dia === 4) return "jueves";
+  if (dia === 5) return "viernes";
+  if (dia === 6) return "sabado";
+  return "otro";
+}
+
 function esHoy(fechaIso) {
   if (!fechaIso) return false;
   const hoy = new Date();
@@ -13,10 +29,28 @@ function esHoy(fechaIso) {
   );
 }
 
+function formatoFechaLarga(fechaIso) {
+  return new Date(fechaIso).toLocaleDateString("es-BO", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function CierreCaja() {
-  const { ventas, cierres, registrarCierre } = useData();
-  const [cerrando, setCerrando] = useState(false);
+  const { ventas, cierres, registrarCierre, eliminarCierre, limpiarCierresAntiguos } = useData();
+
+  const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+
+  // Día del evento que se está registrando: se sugiere solo según la fecha de hoy,
+  // pero el usuario puede cambiarlo (por si el evento cae en otro día distinto).
+  const [diaSeleccionado, setDiaSeleccionado] = useState(diaSemanaDesdeFecha(new Date().toISOString()));
+  const [diaPersonalizado, setDiaPersonalizado] = useState("");
+
+  // Filtro para ver el historial guardado: todos, o solo jueves/viernes/sábado/otro.
+  const [filtroDia, setFiltroDia] = useState("todos");
 
   const ventasHoy = useMemo(() => ventas.filter((v) => esHoy(v.fecha)), [ventas]);
 
@@ -41,26 +75,66 @@ export default function CierreCaja() {
     };
   }, [ventasHoy]);
 
-  const yaCerradoHoy = cierres.some((c) => esHoy(c.fecha));
+  const historialFiltrado = useMemo(
+    () => (filtroDia === "todos" ? cierres : cierres.filter((c) => c.dia === filtroDia)),
+    [cierres, filtroDia]
+  );
 
-  async function cerrarCaja() {
-    setCerrando(true);
+  async function guardarRegistro() {
+    setGuardando(true);
     setMensaje("");
     try {
+      const etiquetaDia =
+        diaSeleccionado === "otro"
+          ? diaPersonalizado.trim() || "Otro"
+          : ETIQUETAS_DIA[diaSeleccionado];
+
       await registrarCierre({
         fecha: new Date().toISOString(),
+        dia: diaSeleccionado,
+        diaEtiqueta: etiquetaDia,
         totalQr: resumen.totalQr,
         totalEfectivo: resumen.totalEfectivo,
         totalGeneral: resumen.totalGeneral,
         cantidadVentas: ventasHoy.length,
         productosVendidos: resumen.productos,
       });
-      setMensaje("Caja cerrada y guardada correctamente.");
+      setMensaje("Registro guardado correctamente.");
     } catch (err) {
       console.error(err);
-      setMensaje("No se pudo cerrar la caja. Intenta de nuevo.");
+      setMensaje("No se pudo guardar el registro. Intenta de nuevo.");
     } finally {
-      setCerrando(false);
+      setGuardando(false);
+    }
+  }
+
+  async function borrarRegistro(id) {
+    if (!window.confirm("¿Eliminar este registro guardado? Esta acción no se puede deshacer.")) return;
+    try {
+      await eliminarCierre(id);
+    } catch (err) {
+      console.error(err);
+      setMensaje("No se pudo eliminar el registro.");
+    }
+  }
+
+  async function limpiarAntiguos() {
+    if (
+      !window.confirm(
+        "Esto eliminará todos los registros guardados con más de 1 mes de antigüedad. ¿Continuar?"
+      )
+    )
+      return;
+    try {
+      const eliminados = await limpiarCierresAntiguos(30);
+      setMensaje(
+        eliminados > 0
+          ? `Se eliminaron ${eliminados} registro(s) de más de 1 mes.`
+          : "No había registros de más de 1 mes para eliminar."
+      );
+    } catch (err) {
+      console.error(err);
+      setMensaje("No se pudo completar la limpieza.");
     }
   }
 
@@ -81,7 +155,7 @@ export default function CierreCaja() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Cierre de caja</h1>
-        <p>Resumen de todo lo vendido hoy, listo para cerrar el día.</p>
+        <p>Resumen de todo lo vendido hoy. Se guarda con su día y fecha; el día no se cierra ni se bloquea.</p>
       </header>
 
       <div className="tarjetas-resumen">
@@ -106,7 +180,7 @@ export default function CierreCaja() {
       <section className="lista-reciente">
         <h2>Productos vendidos hoy</h2>
         {resumen.productos.length === 0 ? (
-          <p className="texto-vacio">Todavía no hay ventas hoy para cerrar.</p>
+          <p className="texto-vacio">Todavía no hay ventas hoy para registrar.</p>
         ) : (
           <table className="tabla">
             <thead>
@@ -129,19 +203,100 @@ export default function CierreCaja() {
         )}
       </section>
 
+      <div className="formulario__fila">
+        <label>
+          Día del evento
+          <select value={diaSeleccionado} onChange={(e) => setDiaSeleccionado(e.target.value)}>
+            <option value="jueves">Jueves</option>
+            <option value="viernes">Viernes</option>
+            <option value="sabado">Sábado</option>
+            <option value="otro">Otro…</option>
+          </select>
+        </label>
+        {diaSeleccionado === "otro" && (
+          <label>
+            Nombre del día
+            <input
+              value={diaPersonalizado}
+              onChange={(e) => setDiaPersonalizado(e.target.value)}
+              placeholder="Ej: Domingo especial"
+            />
+          </label>
+        )}
+      </div>
+
       <div className="formulario__acciones">
         <button
           className="boton boton--primario"
-          onClick={cerrarCaja}
-          disabled={cerrando || ventasHoy.length === 0 || yaCerradoHoy}
+          onClick={guardarRegistro}
+          disabled={guardando || ventasHoy.length === 0}
         >
-          {yaCerradoHoy ? "Caja ya cerrada hoy" : cerrando ? "Cerrando…" : "Cerrar caja de hoy"}
+          {guardando ? "Guardando…" : "Guardar registro del día"}
         </button>
         <button className="boton boton--fantasma" onClick={exportarPDF} disabled={resumen.productos.length === 0}>
           Descargar PDF
         </button>
       </div>
       {mensaje && <div className="formulario__error formulario__error--exito">{mensaje}</div>}
+
+      <section className="lista-reciente">
+        <header className="pagina__cabecera">
+          <h2>Historial de registros guardados</h2>
+          <p>Se guardan al menos 1 mes. Filtra por día para ver solo jueves, viernes o sábado.</p>
+        </header>
+
+        <div className="formulario__fila">
+          <label>
+            Ver
+            <select value={filtroDia} onChange={(e) => setFiltroDia(e.target.value)}>
+              <option value="todos">Todos los días</option>
+              <option value="jueves">Solo jueves</option>
+              <option value="viernes">Solo viernes</option>
+              <option value="sabado">Solo sábado</option>
+              <option value="otro">Otros días</option>
+            </select>
+          </label>
+        </div>
+
+        {historialFiltrado.length === 0 ? (
+          <p className="texto-vacio">No hay registros guardados para este filtro.</p>
+        ) : (
+          <table className="tabla">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Día</th>
+                <th>Ventas</th>
+                <th>Efectivo</th>
+                <th>QR</th>
+                <th>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {historialFiltrado.map((c) => (
+                <tr key={c.id}>
+                  <td>{formatoFechaLarga(c.fecha)}</td>
+                  <td className="tabla__etiqueta">{c.diaEtiqueta || ETIQUETAS_DIA[c.dia] || "—"}</td>
+                  <td>{c.cantidadVentas ?? "—"}</td>
+                  <td>Bs {Number(c.totalEfectivo || 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.totalQr || 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.totalGeneral || 0).toFixed(2)}</td>
+                  <td>
+                    <button className="boton boton--fantasma" onClick={() => borrarRegistro(c.id)}>
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <button className="boton boton--fantasma" onClick={limpiarAntiguos}>
+          Eliminar registros de más de 1 mes
+        </button>
+      </section>
     </div>
   );
 }
