@@ -50,6 +50,7 @@ export function DataProvider({ children }) {
   const [movimientos, movimientosListos] = useColeccion("movimientos");
   const [ingresos, ingresosListos] = useColeccion("ingresos");
   const [gastos, gastosListos] = useColeccion("gastos");
+  const [movimientosBarra, movimientosBarraListos] = useColeccion("movimientosBarra");
 
   const todoListo =
     autenticado &&
@@ -58,7 +59,8 @@ export function DataProvider({ children }) {
     cierresListos &&
     movimientosListos &&
     ingresosListos &&
-    gastosListos;
+    gastosListos &&
+    movimientosBarraListos;
 
   async function agregarProducto(producto) {
     await addDoc(collection(db, "productos"), {
@@ -128,6 +130,46 @@ export function DataProvider({ children }) {
     });
   }
 
+  // Distribución: mueve stock del almacén general a una barra (ingreso), entre
+  // barras (traspaso), o lo da de baja en una barra (rotura, derrame, etc.).
+  // Actualiza el producto (stock general + stock de la barra) y deja un registro
+  // en "movimientosBarra" con la fecha para el historial.
+  async function registrarMovimientoBarra({ tipo, barra, productoId, cantidad, motivo }) {
+    const producto = productos.find((p) => p.id === productoId);
+    if (!producto) throw new Error("Producto no encontrado.");
+
+    const campoBarra = barra === "interior" ? "stockInterior" : "stockSemicubierto";
+    const campoOtraBarra = barra === "interior" ? "stockSemicubierto" : "stockInterior";
+    const stockBarraActual = producto[campoBarra] || 0;
+
+    const cambios = {};
+    let destino = null;
+
+    if (tipo === "ingreso") {
+      cambios.stock = Math.max(0, (producto.stock || 0) - cantidad);
+      cambios[campoBarra] = stockBarraActual + cantidad;
+    } else if (tipo === "traspaso") {
+      destino = barra === "interior" ? "semicubierto" : "interior";
+      cambios[campoBarra] = Math.max(0, stockBarraActual - cantidad);
+      cambios[campoOtraBarra] = (producto[campoOtraBarra] || 0) + cantidad;
+    } else if (tipo === "baja") {
+      cambios[campoBarra] = Math.max(0, stockBarraActual - cantidad);
+    }
+
+    await actualizarProducto(productoId, cambios);
+    await addDoc(collection(db, "movimientosBarra"), {
+      fecha: new Date().toISOString(),
+      tipo,
+      barra,
+      destino,
+      productoId,
+      producto: producto.nombre,
+      cantidad,
+      motivo: motivo || "",
+      creadoEn: serverTimestamp(),
+    });
+  }
+
   const value = {
     listo: todoListo,
     productos,
@@ -136,6 +178,7 @@ export function DataProvider({ children }) {
     movimientos,
     ingresos,
     gastos,
+    movimientosBarra,
     agregarProducto,
     actualizarProducto,
     eliminarProducto,
@@ -146,6 +189,7 @@ export function DataProvider({ children }) {
     registrarMovimiento,
     registrarIngreso,
     registrarGasto,
+    registrarMovimientoBarra,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

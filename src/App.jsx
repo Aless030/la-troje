@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import MenuPrincipal from "./pages/MenuPrincipal";
 import Ventas from "./pages/Ventas";
 import Inventario from "./pages/Inventario";
+import Distribucion from "./pages/Distribucion";
 import CierreCaja from "./pages/CierreCaja";
 import Reportes from "./pages/Reportes";
 import DashboardPage from "./pages/DashboardPage";
@@ -28,6 +29,8 @@ function Contenido({ vista, setVista }) {
       return <Ventas />;
     case "inventario":
       return <Inventario />;
+    case "distribucion":
+      return <Distribucion />;
     case "cierre":
       return <CierreCaja />;
     case "reportes":
