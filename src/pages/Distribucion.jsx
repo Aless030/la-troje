@@ -35,8 +35,15 @@ export default function Distribucion() {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   const campoActivo = campoBarra(barraActiva);
+
+  const productosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return productos;
+    return productos.filter((p) => (p.nombre || "").toLowerCase().includes(texto));
+  }, [productos, busqueda]);
 
   // Qué productos ofrecer en el desplegable, según la acción:
   // - ingreso: sale del almacén general, hace falta stock ahí.
@@ -137,8 +144,20 @@ export default function Distribucion() {
 
       <section className="lista-reciente">
         <h2>Almacén general</h2>
-        {productos.length === 0 ? (
-          <p className="texto-vacio">Todavía no cargaste productos en Inventario.</p>
+        <div className="formulario__fila">
+          <label>
+            Buscar producto
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Ej: Flor de Caña, cerveza…"
+            />
+          </label>
+        </div>
+        {productosFiltrados.length === 0 ? (
+          <p className="texto-vacio">
+            {productos.length === 0 ? "Todavía no cargaste productos en Inventario." : "Ningún producto coincide con la búsqueda."}
+          </p>
         ) : (
           <table className="tabla">
             <thead>
@@ -149,7 +168,7 @@ export default function Distribucion() {
               </tr>
             </thead>
             <tbody>
-              {productos.map((p) => (
+              {productosFiltrados.map((p) => (
                 <tr key={p.id}>
                   <td>{p.nombre}</td>
                   <td>{p.stock ?? 0}</td>

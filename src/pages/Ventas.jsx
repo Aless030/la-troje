@@ -16,7 +16,19 @@ function esHoy(fechaIso) {
   );
 }
 
+const BARRAS = [
+  { valor: "interior", etiqueta: "Interior" },
+  { valor: "semicubierto", etiqueta: "Semicubierto" },
+];
+
+function campoBarra(barra) {
+  return barra === "interior" ? "stockInterior" : "stockSemicubierto";
+}
+
 const VACIO = {
+  cajera: "",
+  comanda: "",
+  barra: "interior",
   mesero: "",
   productoId: "",
   cantidad: 1,
@@ -32,12 +44,22 @@ export default function Ventas() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
 
+  const campoActivo = campoBarra(form.barra);
   const productoSel = productos.find((p) => p.id === form.productoId);
+  const stockDisponible = productoSel ? productoSel[campoActivo] || 0 : 0;
   const precioUnitario = productoSel?.precio || 0;
   const total = precioUnitario * (Number(form.cantidad) || 0);
 
+  const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
+  const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - total) : 0;
+
   const meserosPrevios = useMemo(() => {
     const nombres = new Set(ventas.map((v) => v.mesero).filter(Boolean));
+    return Array.from(nombres);
+  }, [ventas]);
+
+  const cajerasPrevias = useMemo(() => {
+    const nombres = new Set(ventas.map((v) => v.cajera).filter(Boolean));
     return Array.from(nombres);
   }, [ventas]);
 
@@ -50,6 +72,10 @@ export default function Ventas() {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
+  function cambiarBarra(barra) {
+    setForm((f) => ({ ...f, barra, productoId: "" }));
+  }
+
   async function enviar(e) {
     e.preventDefault();
     setError("");
@@ -58,8 +84,10 @@ export default function Ventas() {
     if (!productoSel) return setError("Selecciona un producto.");
     if (!form.cantidad || Number(form.cantidad) <= 0)
       return setError("La cantidad debe ser mayor a 0.");
-    if ((productoSel.stock ?? 0) < Number(form.cantidad))
-      return setError(`Solo hay ${productoSel.stock ?? 0} unidades de "${productoSel.nombre}" en inventario.`);
+    if (stockDisponible < Number(form.cantidad))
+      return setError(
+        `Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" en ${BARRAS.find((b) => b.valor === form.barra).etiqueta}.`
+      );
 
     let montoQr = 0;
     let montoEfectivo = 0;
@@ -79,6 +107,9 @@ export default function Ventas() {
     try {
       await registrarVenta({
         fecha: fechaHoyISO(),
+        cajera: form.cajera.trim(),
+        comanda: form.comanda.trim(),
+        barra: form.barra,
         mesero: form.mesero.trim(),
         productoId: productoSel.id,
         producto: productoSel.nombre,
@@ -90,7 +121,7 @@ export default function Ventas() {
         montoEfectivo,
         observaciones: form.observaciones.trim(),
       });
-      setForm({ ...VACIO, mesero: form.mesero });
+      setForm({ ...VACIO, cajera: form.cajera, mesero: form.mesero, barra: form.barra });
     } catch (err) {
       console.error(err);
       setError("No se pudo registrar la venta. Intenta de nuevo.");
@@ -107,6 +138,39 @@ export default function Ventas() {
       </header>
 
       <form className="formulario" onSubmit={enviar}>
+        <div className="formulario__fila">
+          <label>
+            Cajera
+            <input
+              list="cajeras-lista"
+              value={form.cajera}
+              onChange={(e) => actualizar("cajera", e.target.value)}
+              placeholder="Ej: Maria"
+            />
+            <datalist id="cajeras-lista">
+              {cajerasPrevias.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            Barra
+            <select value={form.barra} onChange={(e) => cambiarBarra(e.target.value)}>
+              {BARRAS.map((b) => (
+                <option key={b.valor} value={b.valor}>{b.etiqueta}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            N° de comanda (opcional)
+            <input
+              value={form.comanda}
+              onChange={(e) => actualizar("comanda", e.target.value)}
+              placeholder="Ej: 128"
+            />
+          </label>
+        </div>
+
         <div className="formulario__fila">
           <label>
             Fecha y hora
@@ -139,8 +203,8 @@ export default function Ventas() {
             >
               <option value="">Selecciona un producto…</option>
               {productos.map((p) => (
-                <option key={p.id} value={p.id} disabled={(p.stock ?? 0) <= 0}>
-                  {p.nombre} {(p.stock ?? 0) <= 0 ? "(sin stock)" : `— stock: ${p.stock ?? 0}`}
+                <option key={p.id} value={p.id} disabled={(p[campoActivo] ?? 0) <= 0}>
+                  {p.nombre} {(p[campoActivo] ?? 0) <= 0 ? "(sin stock aquí)" : `— stock: ${p[campoActivo] ?? 0}`}
                 </option>
               ))}
             </select>
@@ -197,6 +261,24 @@ export default function Ventas() {
               </label>
             </>
           )}
+          {form.formaPago === "efectivo" && (
+            <>
+              <label>
+                Efectivo recibido
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.montoEfectivo}
+                  onChange={(e) => actualizar("montoEfectivo", e.target.value)}
+                  placeholder={total ? total.toFixed(2) : ""}
+                />
+              </label>
+              <label>
+                Cambio
+                <input type="text" value={`Bs ${cambio.toFixed(2)}`} disabled />
+              </label>
+            </>
+          )}
         </div>
 
         <label>
@@ -225,6 +307,7 @@ export default function Ventas() {
             <thead>
               <tr>
                 <th>Hora</th>
+                <th>Barra</th>
                 <th>Mesero</th>
                 <th>Producto</th>
                 <th>Cant.</th>
@@ -236,6 +319,7 @@ export default function Ventas() {
               {ventasHoy.map((v) => (
                 <tr key={v.id}>
                   <td>{new Date(v.fecha).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
                   <td>{v.mesero}</td>
                   <td>{v.producto}</td>
                   <td>{v.cantidad}</td>

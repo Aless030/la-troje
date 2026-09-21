@@ -3,6 +3,7 @@ const ITEMS = [
   { id: "ventas", etiqueta: "Venta", icono: "✎" },
   { id: "inventario", etiqueta: "Inventario", icono: "▤" },
   { id: "distribucion", etiqueta: "Distribución", icono: "⇉" },
+  { id: "recetario", etiqueta: "Recetario y tragos", icono: "🍸" },
   { id: "cierre", etiqueta: "Cierre de caja", icono: "◈" },
   { id: "reportes", etiqueta: "Reportes", icono: "▦" },
   { id: "dashboard", etiqueta: "Dashboard", icono: "◐" },

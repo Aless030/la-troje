@@ -51,6 +51,8 @@ export function DataProvider({ children }) {
   const [ingresos, ingresosListos] = useColeccion("ingresos");
   const [gastos, gastosListos] = useColeccion("gastos");
   const [movimientosBarra, movimientosBarraListos] = useColeccion("movimientosBarra");
+  const [comprasInventario, comprasInventarioListas] = useColeccion("comprasInventario");
+  const [recetas, recetasListas] = useColeccion("recetas", "nombre");
 
   const todoListo =
     autenticado &&
@@ -60,7 +62,9 @@ export function DataProvider({ children }) {
     movimientosListos &&
     ingresosListos &&
     gastosListos &&
-    movimientosBarraListos;
+    movimientosBarraListos &&
+    comprasInventarioListas &&
+    recetasListas;
 
   async function agregarProducto(producto) {
     await addDoc(collection(db, "productos"), {
@@ -77,6 +81,8 @@ export function DataProvider({ children }) {
     await deleteDoc(doc(db, "productos", id));
   }
 
+  // La venta descuenta de la barra donde se vendió (Interior/Semicubierto). Si no
+  // se indica barra (o es "general"), descuenta del almacén general como antes.
   async function registrarVenta(venta) {
     await addDoc(collection(db, "ventas"), {
       ...venta,
@@ -84,8 +90,14 @@ export function DataProvider({ children }) {
     });
     const producto = productos.find((p) => p.id === venta.productoId);
     if (producto) {
-      const nuevoStock = Math.max(0, (producto.stock || 0) - venta.cantidad);
-      await actualizarProducto(producto.id, { stock: nuevoStock });
+      const campo =
+        venta.barra === "interior"
+          ? "stockInterior"
+          : venta.barra === "semicubierto"
+          ? "stockSemicubierto"
+          : "stock";
+      const nuevoValor = Math.max(0, (producto[campo] || 0) - venta.cantidad);
+      await actualizarProducto(producto.id, { [campo]: nuevoValor });
     }
   }
 
@@ -170,6 +182,63 @@ export function DataProvider({ children }) {
     });
   }
 
+  // Carga de inventario con factura y destino directo (almacén general o una
+  // barra), como en la planilla vieja. Crea el producto si es nuevo, o si ya
+  // existe le suma la cantidad al destino elegido. Además deja un registro en
+  // "comprasInventario" con la factura para poder buscarlo después.
+  async function registrarCompra({ productoExistenteId, datosProducto, destino, cantidad, factura }) {
+    const campo =
+      destino === "interior" ? "stockInterior" : destino === "semicubierto" ? "stockSemicubierto" : "stock";
+
+    let productoId = productoExistenteId;
+    let nombreProducto = datosProducto.nombre;
+
+    if (productoExistenteId) {
+      const producto = productos.find((p) => p.id === productoExistenteId);
+      nombreProducto = producto?.nombre || datosProducto.nombre;
+      await actualizarProducto(productoExistenteId, {
+        ...datosProducto,
+        [campo]: (producto?.[campo] || 0) + cantidad,
+      });
+    } else {
+      const nuevo = await addDoc(collection(db, "productos"), {
+        ...datosProducto,
+        stock: 0,
+        stockInterior: 0,
+        stockSemicubierto: 0,
+        [campo]: cantidad,
+        creadoEn: serverTimestamp(),
+      });
+      productoId = nuevo.id;
+    }
+
+    await addDoc(collection(db, "comprasInventario"), {
+      fecha: new Date().toISOString(),
+      productoId,
+      producto: nombreProducto,
+      destino,
+      cantidad,
+      factura: factura || "",
+      precio: datosProducto.precio,
+      creadoEn: serverTimestamp(),
+    });
+  }
+
+  async function registrarReceta(receta) {
+    await addDoc(collection(db, "recetas"), {
+      ...receta,
+      creadoEn: serverTimestamp(),
+    });
+  }
+
+  async function actualizarReceta(id, cambios) {
+    await updateDoc(doc(db, "recetas", id), cambios);
+  }
+
+  async function eliminarReceta(id) {
+    await deleteDoc(doc(db, "recetas", id));
+  }
+
   const value = {
     listo: todoListo,
     productos,
@@ -179,6 +248,8 @@ export function DataProvider({ children }) {
     ingresos,
     gastos,
     movimientosBarra,
+    comprasInventario,
+    recetas,
     agregarProducto,
     actualizarProducto,
     eliminarProducto,
@@ -190,6 +261,10 @@ export function DataProvider({ children }) {
     registrarIngreso,
     registrarGasto,
     registrarMovimientoBarra,
+    registrarCompra,
+    registrarReceta,
+    actualizarReceta,
+    eliminarReceta,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

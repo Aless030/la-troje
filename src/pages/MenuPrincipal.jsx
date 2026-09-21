@@ -33,6 +33,7 @@ export default function MenuPrincipal({ irA }) {
     { id: "ventas", titulo: "Registrar venta", detalle: "Nueva venta con mesero y forma de pago" },
     { id: "inventario", titulo: "Inventario", detalle: "Cargar productos y ver existencias" },
     { id: "distribucion", titulo: "Distribución", detalle: "Repartir productos a las barras" },
+    { id: "recetario", titulo: "Recetario y tragos", detalle: "Costo de cada trago según sus ingredientes" },
     { id: "cierre", titulo: "Cierre de caja", detalle: "Cerrar el día y ver QR vs efectivo" },
     { id: "reportes", titulo: "Reportes", detalle: "Por mesero, por producto y saldos" },
     { id: "dashboard", titulo: "Dashboard", detalle: "Métricas generales del negocio" },

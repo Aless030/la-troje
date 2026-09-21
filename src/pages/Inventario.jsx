@@ -2,6 +2,11 @@ import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 
 const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Comida"];
+const DESTINOS = [
+  { valor: "general", etiqueta: "Almacén general" },
+  { valor: "interior", etiqueta: "Interior" },
+  { valor: "semicubierto", etiqueta: "Semicubierto" },
+];
 
 const VACIO = {
   nombre: "",
@@ -16,14 +21,17 @@ const VACIO = {
   precio: "",
   precioCaja: "",
   stockMinimo: "3",
+  destino: "general",
+  factura: "",
 };
 
 export default function Inventario() {
-  const { productos, agregarProducto, actualizarProducto, eliminarProducto } = useData();
+  const { productos, comprasInventario, actualizarProducto, eliminarProducto, registrarCompra } = useData();
   const [form, setForm] = useState(VACIO);
   const [error, setError] = useState("");
   const [avisoAuto, setAvisoAuto] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
 
   const esBebida = form.familia !== "Comida";
   const esCaja = form.tipoEmpaque === "caja";
@@ -78,13 +86,14 @@ export default function Inventario() {
       precio: String(productoExistente.precio ?? ""),
       precioCaja: String(productoExistente.precioCaja ?? ""),
       stockMinimo: String(productoExistente.stockMinimo ?? "3"),
-      // La cantidad y las botellas sueltas se dejan en blanco: eso es lo nuevo que llegó.
+      // La cantidad, la factura y las botellas sueltas se dejan en blanco: eso es lo nuevo que llegó.
       cantidadBotellas: "",
       cantidadCajas: "",
       botellasSueltas: "",
+      factura: "",
     }));
     setAvisoAuto(
-      `Se cargaron los datos de la última compra de "${productoExistente.nombre}". Solo completa la cantidad que llegó ahora.`
+      `Se cargaron los datos de la última compra de "${productoExistente.nombre}". Solo completa la cantidad, la factura y el almacén destino.`
     );
   }
 
@@ -116,16 +125,17 @@ export default function Inventario() {
     };
 
     if (editandoId) {
-      // Edición directa de un producto: la cantidad ingresada reemplaza el stock actual.
+      // Edición directa de un producto: la cantidad ingresada reemplaza el stock del almacén general.
       await actualizarProducto(editandoId, { ...datos, stock: cantidadTotal });
-    } else if (productoExistente) {
-      // Reposición: se suma la cantidad nueva al stock que ya había.
-      await actualizarProducto(productoExistente.id, {
-        ...datos,
-        stock: (productoExistente.stock || 0) + cantidadTotal,
-      });
     } else {
-      await agregarProducto({ ...datos, stock: cantidadTotal });
+      // Compra nueva (o reposición): se suma al almacén elegido y queda registrada con su factura.
+      await registrarCompra({
+        productoExistenteId: productoExistente?.id || null,
+        datosProducto: datos,
+        destino: form.destino,
+        cantidad: cantidadTotal,
+        factura: form.factura.trim(),
+      });
     }
     setForm(VACIO);
     setEditandoId(null);
@@ -140,7 +150,7 @@ export default function Inventario() {
       familia: p.familia || "Licores",
       volumenCantidad: String(p.volumenCantidad ?? ""),
       volumenUnidad: p.volumenUnidad || "ml",
-      // Al editar se corrige directo la cantidad total en botellas, sin recalcular por caja.
+      // Al editar se corrige directo la cantidad total del almacén general, sin recalcular por caja.
       tipoEmpaque: "botella",
       cantidadBotellas: String(p.stock ?? ""),
       cantidadCajas: "",
@@ -149,6 +159,8 @@ export default function Inventario() {
       precio: String(p.precio ?? ""),
       precioCaja: "",
       stockMinimo: String(p.stockMinimo ?? "3"),
+      destino: "general",
+      factura: "",
     });
   }
 
@@ -157,11 +169,22 @@ export default function Inventario() {
     await actualizarProducto(p.id, { stock: nuevo });
   }
 
+  const productosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return productos;
+    return productos.filter(
+      (p) =>
+        (p.nombre || "").toLowerCase().includes(texto) || (p.familia || "").toLowerCase().includes(texto)
+    );
+  }, [productos, busqueda]);
+
+  const comprasRecientes = useMemo(() => comprasInventario.slice(0, 15), [comprasInventario]);
+
   return (
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Inventario</h1>
-        <p>Carga tus productos por familia. El stock se descuenta solo con cada venta.</p>
+        <p>Carga tus productos por familia y manda la cantidad directo al almacén general o a una barra.</p>
       </header>
 
       <form className="formulario" onSubmit={enviar}>
@@ -289,6 +312,27 @@ export default function Inventario() {
           </div>
         )}
 
+        {!editandoId && (
+          <div className="formulario__fila">
+            <label>
+              Almacén destino
+              <select value={form.destino} onChange={(e) => actualizar("destino", e.target.value)}>
+                {DESTINOS.map((d) => (
+                  <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              N° de factura (opcional)
+              <input
+                value={form.factura}
+                onChange={(e) => actualizar("factura", e.target.value)}
+                placeholder="Ej: 4546"
+              />
+            </label>
+          </div>
+        )}
+
         <div className="formulario__fila">
           {esBebida && esCaja && (
             <label>
@@ -316,7 +360,7 @@ export default function Inventario() {
 
         <div className="formulario__acciones">
           <button type="submit" className="boton boton--primario">
-            {editandoId ? "Guardar cambios" : productoExistente ? "Sumar al stock existente" : "Agregar producto"}
+            {editandoId ? "Guardar cambios" : productoExistente ? "Sumar al almacén elegido" : "Agregar producto"}
           </button>
           {editandoId && (
             <button
@@ -335,9 +379,22 @@ export default function Inventario() {
       </form>
 
       <section className="lista-reciente">
-        <h2>Productos ({productos.length})</h2>
-        {productos.length === 0 ? (
-          <p className="texto-vacio">Todavía no cargaste productos.</p>
+        <div className="formulario__fila">
+          <label>
+            Buscar producto
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Ej: Flor de Caña, cerveza…"
+            />
+          </label>
+        </div>
+
+        <h2>Productos ({productosFiltrados.length})</h2>
+        {productosFiltrados.length === 0 ? (
+          <p className="texto-vacio">
+            {productos.length === 0 ? "Todavía no cargaste productos." : "Ningún producto coincide con la búsqueda."}
+          </p>
         ) : (
           <table className="tabla">
             <thead>
@@ -346,13 +403,15 @@ export default function Inventario() {
                 <th>Familia</th>
                 <th>Volumen</th>
                 <th>Precio</th>
-                <th>Cantidad</th>
+                <th>Almacén</th>
+                <th>Interior</th>
+                <th>Semicubierto</th>
                 <th></th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {productos.map((p) => (
+              {productosFiltrados.map((p) => (
                 <tr key={p.id} className={(p.stock ?? 0) <= (p.stockMinimo ?? 3) ? "tabla__fila--alerta" : ""}>
                   <td>{p.nombre}</td>
                   <td className="tabla__etiqueta">{p.familia || "—"}</td>
@@ -365,6 +424,8 @@ export default function Inventario() {
                       <button type="button" onClick={() => ajustarStock(p, 1)}>+</button>
                     </div>
                   </td>
+                  <td>{p.stockInterior ?? 0}</td>
+                  <td>{p.stockSemicubierto ?? 0}</td>
                   <td>
                     <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
                   </td>
@@ -376,6 +437,38 @@ export default function Inventario() {
                       Eliminar
                     </button>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="lista-reciente">
+        <h2>Últimas compras registradas</h2>
+        {comprasRecientes.length === 0 ? (
+          <p className="texto-vacio">Todavía no hay compras registradas.</p>
+        ) : (
+          <table className="tabla">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Destino</th>
+                <th>Cantidad</th>
+                <th>Factura</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comprasRecientes.map((c) => (
+                <tr key={c.id}>
+                  <td>{new Date(c.fecha).toLocaleDateString("es-BO")}</td>
+                  <td>{c.producto}</td>
+                  <td className="tabla__etiqueta">
+                    {DESTINOS.find((d) => d.valor === c.destino)?.etiqueta || c.destino}
+                  </td>
+                  <td>{c.cantidad}</td>
+                  <td>{c.factura || "—"}</td>
                 </tr>
               ))}
             </tbody>
