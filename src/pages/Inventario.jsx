@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 
 const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Comida"];
+const UNIDADES_VENTA = ["Botella", "Vaso", "Lata", "Jarra", "Copa", "Shot", "Cántaro", "Porción"];
 const DESTINOS = [
   { valor: "general", etiqueta: "Almacén general" },
   { valor: "interior", etiqueta: "Interior" },
@@ -20,6 +21,8 @@ const VACIO = {
   botellasSueltas: "",
   precio: "",
   precioCaja: "",
+  precioVenta: "",
+  unidadVenta: "Botella",
   stockMinimo: "3",
   destino: "general",
   factura: "",
@@ -85,6 +88,8 @@ export default function Inventario() {
       botellasPorCaja: String(productoExistente.botellasPorCaja ?? ""),
       precio: String(productoExistente.precio ?? ""),
       precioCaja: String(productoExistente.precioCaja ?? ""),
+      precioVenta: String(productoExistente.precioVenta ?? ""),
+      unidadVenta: productoExistente.unidadVenta || "Botella",
       stockMinimo: String(productoExistente.stockMinimo ?? "3"),
       // La cantidad, la factura y las botellas sueltas se dejan en blanco: eso es lo nuevo que llegó.
       cantidadBotellas: "",
@@ -109,6 +114,8 @@ export default function Inventario() {
     } else {
       if (!form.precio || Number(form.precio) < 0) return setError("Ingresa un precio válido.");
     }
+    if (!form.precioVenta || Number(form.precioVenta) < 0)
+      return setError("Ingresa el precio de venta al público.");
 
     const datos = {
       nombre: form.nombre.trim(),
@@ -121,6 +128,8 @@ export default function Inventario() {
       botellasSueltas: esBebida && esCaja ? Number(form.botellasSueltas) || 0 : 0,
       precioCaja: esBebida && esCaja ? Number(form.precioCaja) || 0 : 0,
       precio: Number(precioUnitarioCalculado.toFixed(2)),
+      precioVenta: Number(Number(form.precioVenta).toFixed(2)),
+      unidadVenta: form.unidadVenta.trim() || "Botella",
       stockMinimo: Number(form.stockMinimo) || 0,
     };
 
@@ -158,6 +167,8 @@ export default function Inventario() {
       botellasSueltas: "",
       precio: String(p.precio ?? ""),
       precioCaja: "",
+      precioVenta: String(p.precioVenta ?? p.precio ?? ""),
+      unidadVenta: p.unidadVenta || "Botella",
       stockMinimo: String(p.stockMinimo ?? "3"),
       destino: "general",
       factura: "",
@@ -267,9 +278,10 @@ export default function Inventario() {
               />
             </label>
             <label>
-              Botellas sueltas (opcional)
+              Botellas sueltas (opcional, admite decimales/porcentaje ej. 0.15)
               <input
                 type="number"
+                step="0.01"
                 min="0"
                 value={form.botellasSueltas}
                 onChange={(e) => actualizar("botellasSueltas", e.target.value)}
@@ -290,16 +302,17 @@ export default function Inventario() {
         ) : (
           <div className="formulario__fila">
             <label>
-              Cantidad
+              Cantidad (admite decimales/porcentaje ej. 31.15)
               <input
                 type="number"
+                step="0.01"
                 min="0"
                 value={form.cantidadBotellas}
                 onChange={(e) => actualizar("cantidadBotellas", e.target.value)}
               />
             </label>
             <label>
-              Precio {esBebida ? "por botella" : ""} (Bs)
+              Precio de compra {esBebida ? "por botella" : ""} (Bs)
               <input
                 type="number"
                 step="0.01"
@@ -311,6 +324,35 @@ export default function Inventario() {
             </label>
           </div>
         )}
+
+        <div className="formulario__fila">
+          <label>
+            Unidad de venta
+            <input
+              list="unidades-venta-lista"
+              value={form.unidadVenta}
+              onChange={(e) => actualizar("unidadVenta", e.target.value)}
+              placeholder="Ej: Botella, Vaso, Lata…"
+            />
+            <datalist id="unidades-venta-lista">
+              {UNIDADES_VENTA.map((u) => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            Precio de venta al público (Bs)
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.precioVenta}
+              onChange={(e) => actualizar("precioVenta", e.target.value)}
+              placeholder="Ej: 35.00"
+              required
+            />
+          </label>
+        </div>
 
         {!editandoId && (
           <div className="formulario__fila">
@@ -401,8 +443,9 @@ export default function Inventario() {
               <tr>
                 <th>Producto</th>
                 <th>Familia</th>
-                <th>Volumen</th>
-                <th>Precio</th>
+                <th>Unidad</th>
+                <th>Precio compra</th>
+                <th>Precio venta</th>
                 <th>Almacén</th>
                 <th>Interior</th>
                 <th>Semicubierto</th>
@@ -415,12 +458,36 @@ export default function Inventario() {
                 <tr key={p.id} className={(p.stock ?? 0) <= (p.stockMinimo ?? 3) ? "tabla__fila--alerta" : ""}>
                   <td>{p.nombre}</td>
                   <td className="tabla__etiqueta">{p.familia || "—"}</td>
-                  <td>{p.volumenCantidad ? `${p.volumenCantidad} ${p.volumenUnidad}` : "—"}</td>
-                  <td>Bs {Number(p.precio).toFixed(2)}</td>
+                  <td className="tabla__etiqueta">{p.unidadVenta || "Botella"}</td>
+                  <td>Bs {Number(p.precio || 0).toFixed(2)}</td>
+                  <td>
+                    <input
+                      key={`precioVenta-${p.id}-${p.precioVenta}`}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="celda-editable"
+                      defaultValue={p.precioVenta ?? p.precio ?? 0}
+                      onBlur={(e) => {
+                        const nuevo = Number(e.target.value) || 0;
+                        if (nuevo !== (p.precioVenta ?? p.precio ?? 0)) actualizarProducto(p.id, { precioVenta: nuevo });
+                      }}
+                    />
+                  </td>
                   <td>
                     <div className="ajuste-stock">
                       <button type="button" onClick={() => ajustarStock(p, -1)}>−</button>
-                      <span>{p.stock ?? 0}</span>
+                      <input
+                        key={`stock-${p.id}-${p.stock}`}
+                        type="number"
+                        step="0.01"
+                        className="celda-editable celda-editable--stock"
+                        defaultValue={p.stock ?? 0}
+                        onBlur={(e) => {
+                          const nuevo = Number(e.target.value) || 0;
+                          if (nuevo !== (p.stock ?? 0)) actualizarProducto(p.id, { stock: nuevo });
+                        }}
+                      />
                       <button type="button" onClick={() => ajustarStock(p, 1)}>+</button>
                     </div>
                   </td>

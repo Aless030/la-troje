@@ -416,6 +416,37 @@
   gap: 8px;
 }
 
+.precio-con-editar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.precio-con-editar input {
+  flex: 1;
+}
+
+.celda-editable {
+  width: 72px;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  padding: 5px 6px;
+  font-size: 13px;
+  color: var(--texto);
+  background: #fff;
+}
+
+.celda-editable:focus {
+  outline: none;
+  border-color: var(--dorado);
+  box-shadow: 0 0 0 2px rgba(201, 151, 62, 0.2);
+}
+
+.celda-editable--stock {
+  width: 60px;
+  text-align: center;
+}
+
 .ajuste-stock button {
   width: 26px;
   height: 26px;

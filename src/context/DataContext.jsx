@@ -53,6 +53,7 @@ export function DataProvider({ children }) {
   const [movimientosBarra, movimientosBarraListos] = useColeccion("movimientosBarra");
   const [comprasInventario, comprasInventarioListas] = useColeccion("comprasInventario");
   const [recetas, recetasListas] = useColeccion("recetas", "nombre");
+  const [ajustesInventario, ajustesInventarioListos] = useColeccion("ajustesInventario");
 
   const todoListo =
     autenticado &&
@@ -64,7 +65,8 @@ export function DataProvider({ children }) {
     gastosListos &&
     movimientosBarraListos &&
     comprasInventarioListas &&
-    recetasListas;
+    recetasListas &&
+    ajustesInventarioListos;
 
   async function agregarProducto(producto) {
     await addDoc(collection(db, "productos"), {
@@ -220,6 +222,7 @@ export function DataProvider({ children }) {
       cantidad,
       factura: factura || "",
       precio: datosProducto.precio,
+      precioVenta: datosProducto.precioVenta,
       creadoEn: serverTimestamp(),
     });
   }
@@ -239,6 +242,19 @@ export function DataProvider({ children }) {
     await deleteDoc(doc(db, "recetas", id));
   }
 
+  // Guarda una "foto" del cierre de inventario de un período: apertura, venta,
+  // final esperado, saldo real contado y la diferencia, producto por producto.
+  async function registrarAjusteInventario(ajuste) {
+    await addDoc(collection(db, "ajustesInventario"), {
+      ...ajuste,
+      creadoEn: serverTimestamp(),
+    });
+  }
+
+  async function eliminarAjusteInventario(id) {
+    await deleteDoc(doc(db, "ajustesInventario", id));
+  }
+
   const value = {
     listo: todoListo,
     productos,
@@ -250,6 +266,7 @@ export function DataProvider({ children }) {
     movimientosBarra,
     comprasInventario,
     recetas,
+    ajustesInventario,
     agregarProducto,
     actualizarProducto,
     eliminarProducto,
@@ -265,6 +282,8 @@ export function DataProvider({ children }) {
     registrarReceta,
     actualizarReceta,
     eliminarReceta,
+    registrarAjusteInventario,
+    eliminarAjusteInventario,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

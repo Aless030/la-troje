@@ -43,11 +43,14 @@ export default function Ventas() {
   const [form, setForm] = useState(VACIO);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
+  const [precioEditado, setPrecioEditado] = useState("");
+  const [editandoPrecio, setEditandoPrecio] = useState(false);
 
   const campoActivo = campoBarra(form.barra);
   const productoSel = productos.find((p) => p.id === form.productoId);
   const stockDisponible = productoSel ? productoSel[campoActivo] || 0 : 0;
-  const precioUnitario = productoSel?.precio || 0;
+  const precioSugerido = productoSel ? (productoSel.precioVenta ?? productoSel.precio ?? 0) : 0;
+  const precioUnitario = editandoPrecio && precioEditado !== "" ? Number(precioEditado) : precioSugerido;
   const total = precioUnitario * (Number(form.cantidad) || 0);
 
   const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
@@ -113,6 +116,7 @@ export default function Ventas() {
         mesero: form.mesero.trim(),
         productoId: productoSel.id,
         producto: productoSel.nombre,
+        unidad: productoSel.unidadVenta || "Botella",
         cantidad: Number(form.cantidad),
         precioUnitario,
         total,
@@ -122,6 +126,8 @@ export default function Ventas() {
         observaciones: form.observaciones.trim(),
       });
       setForm({ ...VACIO, cajera: form.cajera, mesero: form.mesero, barra: form.barra });
+      setEditandoPrecio(false);
+      setPrecioEditado("");
     } catch (err) {
       console.error(err);
       setError("No se pudo registrar la venta. Intenta de nuevo.");
@@ -198,7 +204,11 @@ export default function Ventas() {
             Producto
             <select
               value={form.productoId}
-              onChange={(e) => actualizar("productoId", e.target.value)}
+              onChange={(e) => {
+                actualizar("productoId", e.target.value);
+                setEditandoPrecio(false);
+                setPrecioEditado("");
+              }}
               required
             >
               <option value="">Selecciona un producto…</option>
@@ -210,8 +220,39 @@ export default function Ventas() {
             </select>
           </label>
           <label>
-            Precio (automático)
-            <input type="text" value={precioUnitario ? `Bs ${precioUnitario.toFixed(2)}` : "—"} disabled />
+            Unidad
+            <input type="text" value={productoSel?.unidadVenta || "—"} disabled />
+          </label>
+          <label>
+            Precio de venta
+            {editandoPrecio ? (
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                autoFocus
+                value={precioEditado}
+                onChange={(e) => setPrecioEditado(e.target.value)}
+                onBlur={() => {
+                  if (precioEditado === "") setEditandoPrecio(false);
+                }}
+              />
+            ) : (
+              <div className="precio-con-editar">
+                <input type="text" value={precioSugerido ? `Bs ${precioSugerido.toFixed(2)}` : "—"} disabled />
+                <button
+                  type="button"
+                  className="boton boton--enlace"
+                  onClick={() => {
+                    setPrecioEditado(String(precioSugerido || ""));
+                    setEditandoPrecio(true);
+                  }}
+                  disabled={!productoSel}
+                >
+                  Cambiar
+                </button>
+              </div>
+            )}
           </label>
           <label>
             Cantidad
@@ -310,6 +351,7 @@ export default function Ventas() {
                 <th>Barra</th>
                 <th>Mesero</th>
                 <th>Producto</th>
+                <th>Unidad</th>
                 <th>Cant.</th>
                 <th>Total</th>
                 <th>Pago</th>
@@ -322,6 +364,7 @@ export default function Ventas() {
                   <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
                   <td>{v.mesero}</td>
                   <td>{v.producto}</td>
+                  <td className="tabla__etiqueta">{v.unidad || "—"}</td>
                   <td>{v.cantidad}</td>
                   <td>Bs {Number(v.total).toFixed(2)}</td>
                   <td className="tabla__etiqueta">{v.formaPago}</td>
