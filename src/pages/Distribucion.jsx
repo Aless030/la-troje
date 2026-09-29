@@ -24,6 +24,10 @@ function etiquetaBarra(barra) {
   return barra === "interior" ? "Interior" : "Semicubierto";
 }
 
+function formatearStock(valor) {
+  return Number(valor || 0).toFixed(2);
+}
+
 export default function Distribucion() {
   const { productos, movimientosBarra, registrarMovimientoBarra } = useData();
 
@@ -171,8 +175,8 @@ export default function Distribucion() {
               {productosFiltrados.map((p) => (
                 <tr key={p.id}>
                   <td>{p.nombre}</td>
-                  <td>{p.stock ?? 0}</td>
-                  <td>{p[campoActivo] ?? 0}</td>
+                  <td>{formatearStock(p.stock)}</td>
+                  <td>{formatearStock(p[campoActivo])}</td>
                 </tr>
               ))}
             </tbody>
@@ -206,7 +210,7 @@ export default function Distribucion() {
               <option value="">Selecciona un producto…</option>
               {productosDisponibles.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.nombre} — disponible: {accionActiva === "ingreso" ? p.stock ?? 0 : p[campoActivo] ?? 0}
+                  {p.nombre} — disponible: {formatearStock(accionActiva === "ingreso" ? p.stock : p[campoActivo])}
                 </option>
               ))}
             </select>
@@ -215,10 +219,11 @@ export default function Distribucion() {
             Cantidad
             <input
               type="number"
-              min="1"
+              min="0.01"
+              step="0.01"
               value={cantidad}
               onChange={(e) => setCantidad(e.target.value)}
-              placeholder="Ej: 15"
+              placeholder="Ej: 10.75"
               required
             />
           </label>

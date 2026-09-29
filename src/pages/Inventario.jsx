@@ -191,6 +191,14 @@ export default function Inventario() {
 
   const comprasRecientes = useMemo(() => comprasInventario.slice(0, 15), [comprasInventario]);
 
+  // Valor actual de todas las existencias, usando el precio de compra unitario.
+  const valorTotalCompra = useMemo(() =>
+    productos.reduce((total, p) => {
+      const stockTotal = Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0);
+      return total + stockTotal * Number(p.precio || 0);
+    }, 0),
+  [productos]);
+
   return (
     <div className="pagina">
       <header className="pagina__cabecera">
@@ -482,7 +490,7 @@ export default function Inventario() {
                         type="number"
                         step="0.01"
                         className="celda-editable celda-editable--stock"
-                        defaultValue={p.stock ?? 0}
+                        defaultValue={Number(p.stock || 0).toFixed(2)}
                         onBlur={(e) => {
                           const nuevo = Number(e.target.value) || 0;
                           if (nuevo !== (p.stock ?? 0)) actualizarProducto(p.id, { stock: nuevo });
@@ -491,8 +499,8 @@ export default function Inventario() {
                       <button type="button" onClick={() => ajustarStock(p, 1)}>+</button>
                     </div>
                   </td>
-                  <td>{p.stockInterior ?? 0}</td>
-                  <td>{p.stockSemicubierto ?? 0}</td>
+                  <td>{Number(p.stockInterior || 0).toFixed(2)}</td>
+                  <td>{Number(p.stockSemicubierto || 0).toFixed(2)}</td>
                   <td>
                     <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
                   </td>
@@ -509,6 +517,9 @@ export default function Inventario() {
             </tbody>
           </table>
         )}
+        <div className="inventario-total-compra">
+          <strong>Total del inventario a precio de compra:</strong> Bs {valorTotalCompra.toFixed(2)}
+        </div>
       </section>
 
       <section className="lista-reciente">
