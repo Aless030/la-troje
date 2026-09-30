@@ -40,6 +40,43 @@ export default function Inventario() {
   const esCaja = form.tipoEmpaque === "caja";
 
   function actualizar(campo, valor) {
+    if (campo === "nombre" && !editandoId) {
+      const nombreBuscado = valor.trim().toLowerCase();
+      const existente = productos.find(
+        (p) => (p.nombre || "").trim().toLowerCase() === nombreBuscado
+      );
+
+      if (existente) {
+        setForm((f) => ({
+          ...f,
+          nombre: existente.nombre || valor,
+          familia: existente.familia || "Licores",
+          volumenCantidad: String(existente.volumenCantidad ?? ""),
+          volumenUnidad: existente.volumenUnidad || "ml",
+          tipoEmpaque: existente.tipoEmpaque || "botella",
+          botellasPorCaja: String(existente.botellasPorCaja ?? ""),
+          precio: String(existente.precio ?? ""),
+          precioCaja: String(existente.precioCaja ?? ""),
+          precioVenta: String(existente.precioVenta ?? existente.precio ?? ""),
+          unidadVenta: existente.unidadVenta || "Botella",
+          stockMinimo: String(existente.stockMinimo ?? "3"),
+          cantidadBotellas: "",
+          cantidadCajas: "",
+          botellasSueltas: "",
+          factura: "",
+          destino: f.destino || "general",
+        }));
+        setAvisoAuto(
+          `Producto encontrado: se cargaron automáticamente los datos guardados de "${existente.nombre}". Solo completa la cantidad, la factura y el almacén destino.`
+        );
+        return;
+      }
+
+      setForm((f) => ({ ...f, nombre: valor }));
+      setAvisoAuto("");
+      return;
+    }
+
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
@@ -76,31 +113,6 @@ export default function Inventario() {
       ) || null
     );
   }, [form.nombre, productos, editandoId]);
-
-  function autocompletarSiExiste() {
-    if (!productoExistente || editandoId) return;
-    setForm((f) => ({
-      ...f,
-      familia: productoExistente.familia || f.familia,
-      volumenCantidad: String(productoExistente.volumenCantidad ?? ""),
-      volumenUnidad: productoExistente.volumenUnidad || "ml",
-      tipoEmpaque: productoExistente.tipoEmpaque || "botella",
-      botellasPorCaja: String(productoExistente.botellasPorCaja ?? ""),
-      precio: String(productoExistente.precio ?? ""),
-      precioCaja: String(productoExistente.precioCaja ?? ""),
-      precioVenta: String(productoExistente.precioVenta ?? ""),
-      unidadVenta: productoExistente.unidadVenta || "Botella",
-      stockMinimo: String(productoExistente.stockMinimo ?? "3"),
-      // La cantidad, la factura y las botellas sueltas se dejan en blanco: eso es lo nuevo que llegó.
-      cantidadBotellas: "",
-      cantidadCajas: "",
-      botellasSueltas: "",
-      factura: "",
-    }));
-    setAvisoAuto(
-      `Se cargaron los datos de la última compra de "${productoExistente.nombre}". Solo completa la cantidad, la factura y el almacén destino.`
-    );
-  }
 
   async function enviar(e) {
     e.preventDefault();
@@ -214,7 +226,6 @@ export default function Inventario() {
               list="productos-lista"
               value={form.nombre}
               onChange={(e) => actualizar("nombre", e.target.value)}
-              onBlur={autocompletarSiExiste}
               placeholder="Ej: Flor de Caña 5 años"
               required
             />
