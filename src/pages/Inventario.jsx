@@ -194,10 +194,16 @@ export default function Inventario() {
 
   const productosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-    if (!texto) return productos;
-    return productos.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(texto) || (p.familia || "").toLowerCase().includes(texto)
+    const lista = texto
+      ? productos.filter(
+          (p) =>
+            (p.nombre || "").toLowerCase().includes(texto) ||
+            (p.familia || "").toLowerCase().includes(texto)
+        )
+      : [...productos];
+
+    return lista.sort((a, b) =>
+      (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })
     );
   }, [productos, busqueda]);
 
@@ -363,11 +369,13 @@ export default function Inventario() {
           <label>
             Precio de venta al público (Bs)
             <input
-              type="number"
-              step="0.01"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={form.precioVenta}
-              onChange={(e) => actualizar("precioVenta", e.target.value)}
+              onChange={(e) => {
+                const valor = e.target.value.replace(",", ".");
+                if (/^\d*(\.\d{0,2})?$/.test(valor)) actualizar("precioVenta", valor);
+              }}
               placeholder="Ej: 35.00"
               required
             />
@@ -483,14 +491,22 @@ export default function Inventario() {
                   <td>
                     <input
                       key={`precioVenta-${p.id}-${p.precioVenta}`}
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       className="celda-editable"
                       defaultValue={p.precioVenta ?? p.precio ?? 0}
+                      onChange={(e) => {
+                        e.target.value = e.target.value.replace(",", ".");
+                      }}
                       onBlur={(e) => {
-                        const nuevo = Number(e.target.value) || 0;
-                        if (nuevo !== (p.precioVenta ?? p.precio ?? 0)) actualizarProducto(p.id, { precioVenta: nuevo });
+                        const numero = Number(e.target.value);
+                        const nuevo = Number.isFinite(numero)
+                          ? Math.round((numero + Number.EPSILON) * 100) / 100
+                          : 0;
+                        e.target.value = String(nuevo);
+                        if (nuevo !== Number(p.precioVenta ?? p.precio ?? 0)) {
+                          actualizarProducto(p.id, { precioVenta: nuevo });
+                        }
                       }}
                     />
                   </td>
