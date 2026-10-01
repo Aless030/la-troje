@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 
-const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Comida"];
+const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Energizantes", "Vinos", "Comida"];
 const UNIDADES_VENTA = ["Botella", "Vaso", "Lata", "Jarra", "Copa", "Shot", "Cántaro", "Porción"];
 const DESTINOS = [
   { valor: "general", etiqueta: "Almacén general" },
@@ -251,7 +251,7 @@ export default function Inventario() {
               Volumen
               <input
                 type="number"
-                step="1"
+                step="0.01"
                 min="0"
                 value={form.volumenCantidad}
                 onChange={(e) => actualizar("volumenCantidad", e.target.value)}
@@ -270,6 +270,7 @@ export default function Inventario() {
               <select value={form.tipoEmpaque} onChange={(e) => actualizar("tipoEmpaque", e.target.value)}>
                 <option value="botella">Botella</option>
                 <option value="caja">Caja</option>
+                <option value="lata">Lata</option>
               </select>
             </label>
           </div>
