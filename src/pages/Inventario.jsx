@@ -34,6 +34,7 @@ export default function Inventario() {
   const [error, setError] = useState("");
   const [avisoAuto, setAvisoAuto] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  const [stockOriginalEdicion, setStockOriginalEdicion] = useState(null);
   const [busqueda, setBusqueda] = useState("");
 
   const esBebida = form.familia !== "Comida";
@@ -146,8 +147,48 @@ export default function Inventario() {
     };
 
     if (editandoId) {
-      // Edición directa de un producto: la cantidad ingresada reemplaza el stock del almacén general.
-      await actualizarProducto(editandoId, { ...datos, stock: cantidadTotal });
+      // En edición, "Cantidad" representa el stock TOTAL del producto
+      // (almacén general + Interior + Semicubierto).
+      // Si el usuario cambia 75 a 73, se descuentan 2 unidades del stock real
+      // sin duplicar ni borrar las existencias de las barras.
+      const productoActual = productos.find((p) => p.id === editandoId);
+      const stockGeneralActual = Number(productoActual?.stock || 0);
+      const stockInteriorActual = Number(productoActual?.stockInterior || 0);
+      const stockSemicubiertoActual = Number(productoActual?.stockSemicubierto || 0);
+      const totalAnterior =
+        stockOriginalEdicion ??
+        stockGeneralActual + stockInteriorActual + stockSemicubiertoActual;
+      const totalNuevo = Math.max(0, Number(cantidadTotal) || 0);
+      const diferencia = totalNuevo - totalAnterior;
+
+      let nuevoGeneral = stockGeneralActual;
+      let nuevoInterior = stockInteriorActual;
+      let nuevoSemicubierto = stockSemicubiertoActual;
+
+      if (diferencia >= 0) {
+        // Si aumenta el total, el ajuste entra al almacén general.
+        nuevoGeneral += diferencia;
+      } else {
+        // Si disminuye, descontamos primero del almacén general y luego de las barras.
+        let porDescontar = Math.abs(diferencia);
+        const deGeneral = Math.min(nuevoGeneral, porDescontar);
+        nuevoGeneral -= deGeneral;
+        porDescontar -= deGeneral;
+
+        const deInterior = Math.min(nuevoInterior, porDescontar);
+        nuevoInterior -= deInterior;
+        porDescontar -= deInterior;
+
+        const deSemicubierto = Math.min(nuevoSemicubierto, porDescontar);
+        nuevoSemicubierto -= deSemicubierto;
+      }
+
+      await actualizarProducto(editandoId, {
+        ...datos,
+        stock: Number(nuevoGeneral.toFixed(2)),
+        stockInterior: Number(nuevoInterior.toFixed(2)),
+        stockSemicubierto: Number(nuevoSemicubierto.toFixed(2)),
+      });
     } else {
       // Compra nueva (o reposición): se suma al almacén elegido y queda registrada con su factura.
       await registrarCompra({
@@ -160,20 +201,27 @@ export default function Inventario() {
     }
     setForm(VACIO);
     setEditandoId(null);
+    setStockOriginalEdicion(null);
     setAvisoAuto("");
   }
 
   function editar(p) {
+    const stockTotal =
+      Number(p.stock || 0) +
+      Number(p.stockInterior || 0) +
+      Number(p.stockSemicubierto || 0);
+
     setEditandoId(p.id);
+    setStockOriginalEdicion(stockTotal);
     setAvisoAuto("");
     setForm({
       nombre: p.nombre || "",
       familia: p.familia || "Licores",
       volumenCantidad: String(p.volumenCantidad ?? ""),
       volumenUnidad: p.volumenUnidad || "ml",
-      // Al editar se corrige directo la cantidad total del almacén general, sin recalcular por caja.
+      // Al editar mostramos la cantidad TOTAL existente en todas las ubicaciones.
       tipoEmpaque: "botella",
-      cantidadBotellas: String(p.stock ?? ""),
+      cantidadBotellas: String(Number(stockTotal.toFixed(2))),
       cantidadCajas: "",
       botellasPorCaja: String(p.botellasPorCaja ?? ""),
       botellasSueltas: "",
@@ -438,6 +486,7 @@ export default function Inventario() {
               className="boton boton--fantasma"
               onClick={() => {
                 setEditandoId(null);
+                setStockOriginalEdicion(null);
                 setAvisoAuto("");
                 setForm(VACIO);
               }}
