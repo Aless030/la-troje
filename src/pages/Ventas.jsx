@@ -181,9 +181,9 @@ export default function Ventas() {
     try {
       await registrarVenta({
         fecha: fechaHoyISO(),
-        cajera: form.cajera.trim(),
+        cajera: aperturaActiva.cajera,
         comanda: form.comanda.trim(),
-        barra: form.barra,
+        barra: aperturaActiva.barra,
         mesero: form.mesero.trim(),
         productoId: productoSel.id,
         producto: productoSel.nombre,
@@ -259,10 +259,9 @@ export default function Ventas() {
           <label>
             Cajera
             <input
-              list="cajeras-lista"
-              value={form.cajera}
-              onChange={(e) => actualizar("cajera", e.target.value)}
-              placeholder="Ej: Maria"
+              value={aperturaActiva.cajera || ""}
+              readOnly
+              disabled
             />
             <datalist id="cajeras-lista">
               {cajerasPrevias.map((c) => (
@@ -272,7 +271,7 @@ export default function Ventas() {
           </label>
           <label>
             Barra
-            <select value={form.barra} onChange={(e) => cambiarBarra(e.target.value)}>
+            <select value={aperturaActiva.barra || ""} disabled>
               {BARRAS.map((b) => (
                 <option key={b.valor} value={b.valor}>{b.etiqueta}</option>
               ))}
@@ -295,18 +294,15 @@ export default function Ventas() {
           </label>
           <label>
             Nombre del mesero
-            <input
-              list="meseros-lista"
+            <select
               value={form.mesero}
               onChange={(e) => actualizar("mesero", e.target.value)}
-              placeholder="Ej: Carla"
               required
-            />
-            <datalist id="meseros-lista">
-              {meserosPrevios.map((m) => (
-                <option key={m} value={m} />
+            >
+              {(aperturaActiva.meseros || []).map((m) => (
+                <option key={m} value={m}>{m}</option>
               ))}
-            </datalist>
+            </select>
           </label>
         </div>
 
