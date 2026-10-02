@@ -41,12 +41,32 @@ export default function Reportes() {
   const porProducto = useMemo(() => {
     const mapa = {};
     ventasFiltradas.forEach((v) => {
-      if (!mapa[v.producto]) mapa[v.producto] = { producto: v.producto, cantidad: 0, total: 0 };
+      if (!mapa[v.producto]) {
+        const productoInventario = productos.find(
+          (p) =>
+            p.id === v.productoId ||
+            (p.nombre || "").trim().toLowerCase() ===
+              (v.producto || "").trim().toLowerCase()
+        );
+
+        mapa[v.producto] = {
+          producto: v.producto,
+          cantidad: 0,
+          existencia: productoInventario
+            ? Number(productoInventario.stock || 0) +
+              Number(productoInventario.stockInterior || 0) +
+              Number(productoInventario.stockSemicubierto || 0)
+            : 0,
+          total: 0,
+        };
+      }
+
       mapa[v.producto].cantidad += v.cantidad;
       mapa[v.producto].total += v.total;
     });
+
     return Object.values(mapa).sort((a, b) => b.cantidad - a.cantidad);
-  }, [ventasFiltradas]);
+  }, [ventasFiltradas, productos]);
 
   const saldos = useMemo(() => {
     const totalQr = ventasFiltradas.reduce((s, v) => s + (v.montoQr || 0), 0);
@@ -177,7 +197,8 @@ export default function Reportes() {
       titulo: "Por producto",
       columnas: [
         { titulo: "Producto", clave: "producto" },
-        { titulo: "Cantidad", clave: "cantidad" },
+        { titulo: "Producto vendido", clave: "cantidad" },
+        { titulo: "Inventario en existencia", clave: "existencia" },
         { titulo: "Total Bs", clave: "total" },
       ],
       filas: porProducto,
