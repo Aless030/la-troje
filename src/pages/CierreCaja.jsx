@@ -39,7 +39,10 @@ function formatoFechaLarga(fechaIso) {
 }
 
 export default function CierreCaja() {
-  const { ventas, cierres, registrarCierre, eliminarCierre, limpiarCierresAntiguos } = useData();
+  const {
+    ventas, cierres, aperturasCaja, gastosCaja,
+    registrarCierre, eliminarCierre, limpiarCierresAntiguos, cerrarAperturaCaja
+  } = useData();
 
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
@@ -53,6 +56,21 @@ export default function CierreCaja() {
   const [filtroDia, setFiltroDia] = useState("todos");
 
   const ventasHoy = useMemo(() => ventas.filter((v) => esHoy(v.fecha)), [ventas]);
+
+  const aperturaActiva = useMemo(
+    () => aperturasCaja.find((a) => a.estado === "abierta" && esHoy(a.fecha)) || null,
+    [aperturasCaja]
+  );
+
+  const gastosApertura = useMemo(
+    () => aperturaActiva ? gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id) : [],
+    [gastosCaja, aperturaActiva]
+  );
+
+  const totalGastos = useMemo(
+    () => gastosApertura.reduce((s, g) => s + Number(g.monto || 0), 0),
+    [gastosApertura]
+  );
 
   const resumen = useMemo(() => {
     const totalQr = ventasHoy.reduce((s, v) => s + (v.montoQr || 0), 0);
@@ -74,6 +92,10 @@ export default function CierreCaja() {
       productos: Object.values(porProducto).sort((a, b) => b.cantidad - a.cantidad),
     };
   }, [ventasHoy]);
+
+  const cajaChica = Number(aperturaActiva?.cajaChica || 0);
+  const efectivoDeVenta = Math.max(0, resumen.totalEfectivo - totalGastos);
+  const efectivoAEntregar = efectivoDeVenta + cajaChica;
 
   const historialFiltrado = useMemo(
     () => (filtroDia === "todos" ? cierres : cierres.filter((c) => c.dia === filtroDia)),
@@ -98,8 +120,22 @@ export default function CierreCaja() {
         totalGeneral: resumen.totalGeneral,
         cantidadVentas: ventasHoy.length,
         productosVendidos: resumen.productos,
+        aperturaId: aperturaActiva?.id || null,
+        cajera: aperturaActiva?.cajera || "",
+        barra: aperturaActiva?.barra || "",
+        meseros: aperturaActiva?.meseros || [],
+        cajaChica,
+        totalGastos,
+        efectivoDeVenta,
+        efectivoAEntregar,
       });
-      setMensaje("Registro guardado correctamente.");
+      if (aperturaActiva) {
+        await cerrarAperturaCaja(aperturaActiva.id, {
+          totalQr: resumen.totalQr, totalEfectivo: resumen.totalEfectivo, totalGastos,
+          efectivoDeVenta, efectivoAEntregar, cajaChica,
+        });
+      }
+      setMensaje("Cierre guardado correctamente. La caja quedó cerrada.");
     } catch (err) {
       console.error(err);
       setMensaje("No se pudo guardar el registro. Intenta de nuevo.");
@@ -175,7 +211,32 @@ export default function CierreCaja() {
           <span className="tarjeta-metrica__etiqueta">Total general</span>
           <span className="tarjeta-metrica__valor">Bs {resumen.totalGeneral.toFixed(2)}</span>
         </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">Gastos (se restan solo del efectivo)</span>
+          <span className="tarjeta-metrica__valor">Bs {totalGastos.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">Efectivo de venta</span>
+          <span className="tarjeta-metrica__valor">Bs {efectivoDeVenta.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">Caja chica</span>
+          <span className="tarjeta-metrica__valor">Bs {cajaChica.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica tarjeta-metrica--destacada">
+          <span className="tarjeta-metrica__etiqueta">Efectivo a entregar</span>
+          <span className="tarjeta-metrica__valor">Bs {efectivoAEntregar.toFixed(2)}</span>
+        </div>
       </div>
+
+      <section className="lista-reciente">
+        <h2>Datos de apertura</h2>
+        {aperturaActiva ? (
+          <p><strong>Abrió:</strong> {aperturaActiva.cajera} · <strong>Barra:</strong> {aperturaActiva.barra} · <strong>Meseros:</strong> {(aperturaActiva.meseros || []).join(", ")} · <strong>Caja chica:</strong> Bs {cajaChica.toFixed(2)}</p>
+        ) : (
+          <p className="texto-vacio">No hay una caja abierta hoy.</p>
+        )}
+      </section>
 
       <section className="lista-reciente">
         <h2>Productos vendidos hoy</h2>
@@ -229,7 +290,7 @@ export default function CierreCaja() {
         <button
           className="boton boton--primario"
           onClick={guardarRegistro}
-          disabled={guardando || ventasHoy.length === 0}
+          disabled={guardando || ventasHoy.length === 0 || !aperturaActiva}
         >
           {guardando ? "Guardando…" : "Guardar registro del día"}
         </button>
@@ -270,6 +331,10 @@ export default function CierreCaja() {
                 <th>Efectivo</th>
                 <th>QR</th>
                 <th>Total</th>
+                <th>Gastos</th>
+                <th>Efectivo venta</th>
+                <th>Caja chica</th>
+                <th>Efectivo a entregar</th>
                 <th></th>
               </tr>
             </thead>
@@ -282,6 +347,10 @@ export default function CierreCaja() {
                   <td>Bs {Number(c.totalEfectivo || 0).toFixed(2)}</td>
                   <td>Bs {Number(c.totalQr || 0).toFixed(2)}</td>
                   <td>Bs {Number(c.totalGeneral || 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.totalGastos || 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.efectivoDeVenta ?? c.totalEfectivo ?? 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.cajaChica || 0).toFixed(2)}</td>
+                  <td>Bs {Number(c.efectivoAEntregar ?? c.totalEfectivo ?? 0).toFixed(2)}</td>
                   <td>
                     <button className="boton boton--fantasma" onClick={() => borrarRegistro(c.id)}>
                       Eliminar

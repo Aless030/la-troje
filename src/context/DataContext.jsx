@@ -54,6 +54,8 @@ export function DataProvider({ children }) {
   const [comprasInventario, comprasInventarioListas] = useColeccion("comprasInventario");
   const [recetas, recetasListas] = useColeccion("recetas", "nombre");
   const [ajustesInventario, ajustesInventarioListos] = useColeccion("ajustesInventario");
+  const [aperturasCaja, aperturasCajaListas] = useColeccion("aperturasCaja");
+  const [gastosCaja, gastosCajaListos] = useColeccion("gastosCaja");
 
   const todoListo =
     autenticado &&
@@ -66,7 +68,9 @@ export function DataProvider({ children }) {
     movimientosBarraListos &&
     comprasInventarioListas &&
     recetasListas &&
-    ajustesInventarioListos;
+    ajustesInventarioListos &&
+    aperturasCajaListas &&
+    gastosCajaListos;
 
   async function agregarProducto(producto) {
     await addDoc(collection(db, "productos"), {
@@ -227,6 +231,30 @@ export function DataProvider({ children }) {
     });
   }
 
+
+  async function registrarAperturaCaja(apertura) {
+    await addDoc(collection(db, "aperturasCaja"), {
+      ...apertura,
+      estado: "abierta",
+      creadoEn: serverTimestamp(),
+    });
+  }
+
+  async function cerrarAperturaCaja(id, datosCierre = {}) {
+    await updateDoc(doc(db, "aperturasCaja", id), {
+      estado: "cerrada",
+      cerradaEn: new Date().toISOString(),
+      ...datosCierre,
+    });
+  }
+
+  async function registrarGastoCaja(gasto) {
+    await addDoc(collection(db, "gastosCaja"), {
+      ...gasto,
+      creadoEn: serverTimestamp(),
+    });
+  }
+
   async function registrarReceta(receta) {
     await addDoc(collection(db, "recetas"), {
       ...receta,
@@ -267,6 +295,8 @@ export function DataProvider({ children }) {
     comprasInventario,
     recetas,
     ajustesInventario,
+    aperturasCaja,
+    gastosCaja,
     agregarProducto,
     actualizarProducto,
     eliminarProducto,
@@ -279,6 +309,9 @@ export function DataProvider({ children }) {
     registrarGasto,
     registrarMovimientoBarra,
     registrarCompra,
+    registrarAperturaCaja,
+    cerrarAperturaCaja,
+    registrarGastoCaja,
     registrarReceta,
     actualizarReceta,
     eliminarReceta,

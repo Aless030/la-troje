@@ -36,15 +36,23 @@ const VACIO = {
   montoQr: "",
   montoEfectivo: "",
   observaciones: "",
+  complemento: "",
 };
 
 export default function Ventas() {
-  const { productos, ventas, registrarVenta } = useData();
+  const {
+    productos, ventas, aperturasCaja, gastosCaja,
+    registrarVenta, registrarAperturaCaja, registrarGastoCaja
+  } = useData();
   const [form, setForm] = useState(VACIO);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
   const [precioEditado, setPrecioEditado] = useState("");
   const [editandoPrecio, setEditandoPrecio] = useState(false);
+  const [aperturaForm, setAperturaForm] = useState({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
+  const [gastoForm, setGastoForm] = useState({ concepto: "", monto: "", observaciones: "" });
+  const [mensajeApertura, setMensajeApertura] = useState("");
+  const [mensajeGasto, setMensajeGasto] = useState("");
 
   const campoActivo = campoBarra(form.barra);
   const productoSel = productos.find((p) => p.id === form.productoId);
@@ -66,6 +74,27 @@ export default function Ventas() {
     return Array.from(nombres);
   }, [ventas]);
 
+  const aperturaActiva = useMemo(
+    () => aperturasCaja.find((a) => a.estado === "abierta" && esHoy(a.fecha)) || null,
+    [aperturasCaja]
+  );
+
+  const cajerasAperturaPrevias = useMemo(() => {
+    const nombres = new Set([
+      ...cajerasPrevias,
+      ...aperturasCaja.map((a) => a.cajera).filter(Boolean),
+    ]);
+    return Array.from(nombres).sort((a, b) => a.localeCompare(b, "es"));
+  }, [cajerasPrevias, aperturasCaja]);
+
+  const meserosAperturaPrevios = useMemo(() => {
+    const nombres = new Set(meserosPrevios);
+    aperturasCaja.forEach((a) => {
+      (a.meseros || []).forEach((m) => nombres.add(m));
+    });
+    return Array.from(nombres).sort((a, b) => a.localeCompare(b, "es"));
+  }, [meserosPrevios, aperturasCaja]);
+
   const ventasHoy = useMemo(
     () => ventas.filter((v) => esHoy(v.fecha)).slice(0, 12),
     [ventas]
@@ -79,10 +108,52 @@ export default function Ventas() {
     setForm((f) => ({ ...f, barra, productoId: "" }));
   }
 
+  async function abrirCaja(e) {
+    e.preventDefault();
+    setMensajeApertura("");
+    const cajera = aperturaForm.cajera.trim();
+    const meseros = aperturaForm.meseros.split(",").map((m) => m.trim()).filter(Boolean);
+    const cajaChica = Number(aperturaForm.cajaChica) || 0;
+    if (!cajera) return setMensajeApertura("Escribe el nombre de la persona que abre la caja.");
+    if (cajaChica < 0) return setMensajeApertura("La caja chica no puede ser negativa.");
+    if (meseros.length === 0) return setMensajeApertura("Escribe al menos un mesero.");
+    try {
+      await registrarAperturaCaja({
+        fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
+      });
+      setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: meseros[0] || "" }));
+      setMensajeApertura("Caja abierta correctamente.");
+    } catch (err) {
+      console.error(err);
+      setMensajeApertura("No se pudo abrir la caja.");
+    }
+  }
+
+  async function guardarGasto(e) {
+    e.preventDefault();
+    setMensajeGasto("");
+    if (!aperturaActiva) return setMensajeGasto("Primero debes abrir la caja.");
+    if (!gastoForm.concepto.trim()) return setMensajeGasto("Escribe el concepto del gasto.");
+    const monto = Number(gastoForm.monto) || 0;
+    if (monto <= 0) return setMensajeGasto("Ingresa un monto mayor a 0.");
+    try {
+      await registrarGastoCaja({
+        fecha: fechaHoyISO(), aperturaId: aperturaActiva.id, barra: aperturaActiva.barra,
+        concepto: gastoForm.concepto.trim(), monto, observaciones: gastoForm.observaciones.trim(),
+      });
+      setGastoForm({ concepto: "", monto: "", observaciones: "" });
+      setMensajeGasto("Gasto registrado.");
+    } catch (err) {
+      console.error(err);
+      setMensajeGasto("No se pudo registrar el gasto.");
+    }
+  }
+
   async function enviar(e) {
     e.preventDefault();
     setError("");
 
+    if (!aperturaActiva) return setError("Primero debes realizar la apertura de caja.");
     if (!form.mesero.trim()) return setError("Escribe el nombre del mesero.");
     if (!productoSel) return setError("Selecciona un producto.");
     if (!form.cantidad || Number(form.cantidad) <= 0)
@@ -124,8 +195,10 @@ export default function Ventas() {
         montoQr,
         montoEfectivo,
         observaciones: form.observaciones.trim(),
+        complemento: form.complemento.trim(),
+        aperturaId: aperturaActiva.id,
       });
-      setForm({ ...VACIO, cajera: form.cajera, mesero: form.mesero, barra: form.barra });
+      setForm({ ...VACIO, cajera: form.cajera, mesero: form.mesero, barra: form.barra, complemento: "" });
       setEditandoPrecio(false);
       setPrecioEditado("");
     } catch (err) {
@@ -143,6 +216,44 @@ export default function Ventas() {
         <p>{new Date().toLocaleString("es-BO", { dateStyle: "full", timeStyle: "short" })}</p>
       </header>
 
+      {!aperturaActiva ? (
+        <form className="formulario" onSubmit={abrirCaja}>
+          <h2>Apertura de caja</h2>
+          <div className="formulario__fila">
+            <label>
+              Nombre de quien apertura
+              <input list="cajeras-apertura-lista" value={aperturaForm.cajera} onChange={(e) => setAperturaForm((f) => ({ ...f, cajera: e.target.value }))} placeholder="Ej: María" required />
+              <datalist id="cajeras-apertura-lista">{cajerasAperturaPrevias.map((c) => <option key={c} value={c} />)}</datalist>
+            </label>
+            <label>
+              Caja chica / Con cuánto abre (Bs)
+              <input type="number" step="0.01" min="0" value={aperturaForm.cajaChica} onChange={(e) => setAperturaForm((f) => ({ ...f, cajaChica: e.target.value }))} placeholder="Ej: 150" required />
+            </label>
+            <label>
+              Barra
+              <select value={aperturaForm.barra} onChange={(e) => setAperturaForm((f) => ({ ...f, barra: e.target.value }))}>
+                {BARRAS.map((b) => <option key={b.valor} value={b.valor}>{b.etiqueta}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="formulario__fila">
+            <label>
+              Meseros del turno
+              <input list="meseros-apertura-lista" value={aperturaForm.meseros} onChange={(e) => setAperturaForm((f) => ({ ...f, meseros: e.target.value }))} placeholder="Ej: Carla, José, Luis" required />
+              <datalist id="meseros-apertura-lista">{meserosAperturaPrevios.map((m) => <option key={m} value={m} />)}</datalist>
+            </label>
+          </div>
+          {mensajeApertura && <div className="formulario__error">{mensajeApertura}</div>}
+          <button type="submit" className="boton boton--primario">Abrir caja</button>
+        </form>
+      ) : (
+        <section className="lista-reciente">
+          <h2>Caja abierta</h2>
+          <p><strong>{aperturaActiva.cajera}</strong> · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
+        </section>
+      )}
+
+      {aperturaActiva && (
       <form className="formulario" onSubmit={enviar}>
         <div className="formulario__fila">
           <label>
@@ -266,6 +377,15 @@ export default function Ventas() {
           </label>
         </div>
 
+        {productoSel && (
+          <div className="formulario__fila">
+            <label>
+              Complemento (opcional)
+              <input value={form.complemento} onChange={(e) => actualizar("complemento", e.target.value)} placeholder="Ej: Sprite, Schweppes, tónica…" />
+            </label>
+          </div>
+        )}
+
         <div className="formulario__total">Total: Bs {total.toFixed(2)}</div>
 
         <div className="formulario__fila">
@@ -338,6 +458,29 @@ export default function Ventas() {
           {enviando ? "Registrando…" : "Registrar venta"}
         </button>
       </form>
+      )}
+
+      {aperturaActiva && (
+      <form className="formulario" onSubmit={guardarGasto}>
+        <h2>Gastos</h2>
+        <div className="formulario__fila">
+          <label>Concepto<input value={gastoForm.concepto} onChange={(e) => setGastoForm((f) => ({ ...f, concepto: e.target.value }))} placeholder="Ej: Sonido" /></label>
+          <label>Monto (Bs)<input type="number" step="0.01" min="0" value={gastoForm.monto} onChange={(e) => setGastoForm((f) => ({ ...f, monto: e.target.value }))} /></label>
+          <label>Observaciones<input value={gastoForm.observaciones} onChange={(e) => setGastoForm((f) => ({ ...f, observaciones: e.target.value }))} placeholder="Opcional" /></label>
+        </div>
+        {mensajeGasto && <div className="formulario__error formulario__error--exito">{mensajeGasto}</div>}
+        <button type="submit" className="boton boton--primario">Registrar gasto</button>
+      </form>
+      )}
+
+      {aperturaActiva && gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id).length > 0 && (
+        <section className="lista-reciente">
+          <h2>Gastos de esta caja</h2>
+          <table className="tabla"><thead><tr><th>Concepto</th><th>Monto</th><th>Observaciones</th></tr></thead><tbody>
+            {gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id).map((g) => <tr key={g.id}><td>{g.concepto}</td><td>Bs {Number(g.monto || 0).toFixed(2)}</td><td>{g.observaciones || "—"}</td></tr>)}
+          </tbody></table>
+        </section>
+      )}
 
       <section className="lista-reciente">
         <h2>Ventas de hoy</h2>
