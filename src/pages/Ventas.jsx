@@ -42,7 +42,7 @@ const VACIO = {
 export default function Ventas() {
   const {
     productos, ventas, aperturasCaja, gastosCaja,
-    registrarVenta, registrarAperturaCaja, registrarGastoCaja
+    registrarVenta, registrarAperturaCaja, registrarGastoCaja, registrarCierre, cerrarAperturaCaja
   } = useData();
   const [form, setForm] = useState(VACIO);
   const [enviando, setEnviando] = useState(false);
@@ -53,16 +53,19 @@ export default function Ventas() {
   const [gastoForm, setGastoForm] = useState({ concepto: "", monto: "", observaciones: "" });
   const [mensajeApertura, setMensajeApertura] = useState("");
   const [mensajeGasto, setMensajeGasto] = useState("");
+  const [productosComanda, setProductosComanda] = useState([]);
+  const [cerrandoCaja, setCerrandoCaja] = useState(false);
 
   const campoActivo = campoBarra(form.barra);
   const productoSel = productos.find((p) => p.id === form.productoId);
   const stockDisponible = productoSel ? productoSel[campoActivo] || 0 : 0;
   const precioSugerido = productoSel ? (productoSel.precioVenta ?? productoSel.precio ?? 0) : 0;
   const precioUnitario = editandoPrecio && precioEditado !== "" ? Number(precioEditado) : precioSugerido;
-  const total = precioUnitario * (Number(form.cantidad) || 0);
+  const totalProducto = precioUnitario * (Number(form.cantidad) || 0);
+  const totalComanda = productosComanda.reduce((s, p) => s + Number(p.total || 0), 0);
 
   const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
-  const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - total) : 0;
+  const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - totalComanda) : 0;
 
   const meserosPrevios = useMemo(() => {
     const nombres = new Set(ventas.map((v) => v.mesero).filter(Boolean));
@@ -149,56 +152,116 @@ export default function Ventas() {
     }
   }
 
+  function agregarProductoComanda() {
+    setError("");
+    if (productosComanda.length >= 3) return setError("Una comanda puede tener como máximo 3 productos.");
+    if (!productoSel) return setError("Selecciona un producto para agregar.");
+    const cantidad = Number(form.cantidad) || 0;
+    if (cantidad <= 0) return setError("La cantidad debe ser mayor a 0.");
+    const yaAgregado = productosComanda
+      .filter((p) => p.productoId === productoSel.id)
+      .reduce((s, p) => s + Number(p.cantidad || 0), 0);
+    if (stockDisponible < yaAgregado + cantidad) {
+      return setError(`Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" disponibles en esta barra.`);
+    }
+    setProductosComanda((lista) => [...lista, {
+      productoId: productoSel.id,
+      producto: productoSel.nombre,
+      unidad: productoSel.unidadVenta || "Botella",
+      cantidad,
+      precioUnitario,
+      total: totalProducto,
+      complemento: form.complemento.trim(),
+    }]);
+    setForm((f) => ({ ...f, productoId: "", cantidad: 1, complemento: "" }));
+    setEditandoPrecio(false);
+    setPrecioEditado("");
+  }
+
+  function quitarProductoComanda(indice) {
+    setProductosComanda((lista) => lista.filter((_, i) => i !== indice));
+  }
+
+  async function cerrarCajaDelDia() {
+    if (!aperturaActiva || cerrandoCaja) return;
+    if (!window.confirm("¿Cerrar la caja de hoy? Después tendrás que hacer una nueva apertura para seguir vendiendo.")) return;
+    setCerrandoCaja(true);
+    setError("");
+    try {
+      const ventasCaja = ventas.filter((v) => v.aperturaId === aperturaActiva.id);
+      const gastosDeCaja = gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id);
+      const totalEfectivo = ventasCaja.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0);
+      const totalQr = ventasCaja.reduce((s, v) => s + Number(v.montoQr || 0), 0);
+      const totalGastos = gastosDeCaja.reduce((s, g) => s + Number(g.monto || 0), 0);
+      const cajaChica = Number(aperturaActiva.cajaChica || 0);
+      const efectivoNeto = totalEfectivo - totalGastos;
+      const efectivoEntregar = efectivoNeto + cajaChica;
+      const fechaCierre = fechaHoyISO();
+      await registrarCierre({
+        fecha: fechaCierre, aperturaId: aperturaActiva.id, cajera: aperturaActiva.cajera,
+        barra: aperturaActiva.barra, cajaChica, totalEfectivo, totalQr,
+        totalGeneral: totalEfectivo + totalQr, totalGastos, efectivoNeto, efectivoEntregar,
+      });
+      await cerrarAperturaCaja(aperturaActiva.id, { fechaCierre, totalEfectivo, totalQr, totalGastos, efectivoEntregar });
+      setProductosComanda([]);
+      setForm(VACIO);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo cerrar la caja. Intenta de nuevo.");
+    } finally {
+      setCerrandoCaja(false);
+    }
+  }
+
   async function enviar(e) {
     e.preventDefault();
     setError("");
-
     if (!aperturaActiva) return setError("Primero debes realizar la apertura de caja.");
-    if (!form.mesero.trim()) return setError("Escribe el nombre del mesero.");
-    if (!productoSel) return setError("Selecciona un producto.");
-    if (!form.cantidad || Number(form.cantidad) <= 0)
-      return setError("La cantidad debe ser mayor a 0.");
-    if (stockDisponible < Number(form.cantidad))
-      return setError(
-        `Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" en ${BARRAS.find((b) => b.valor === form.barra).etiqueta}.`
-      );
+    if (!form.mesero.trim()) return setError("Selecciona el mesero.");
+    if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
+    if (productosComanda.length === 0) return setError("Agrega al menos un producto a la comanda.");
 
-    let montoQr = 0;
-    let montoEfectivo = 0;
-    if (form.formaPago === "qr") montoQr = total;
-    if (form.formaPago === "efectivo") montoEfectivo = total;
+    let montoQrTotal = 0;
+    let montoEfectivoTotal = 0;
+    if (form.formaPago === "qr") montoQrTotal = totalComanda;
+    if (form.formaPago === "efectivo") montoEfectivoTotal = totalComanda;
     if (form.formaPago === "ambos") {
-      montoQr = Number(form.montoQr) || 0;
-      montoEfectivo = Number(form.montoEfectivo) || 0;
-      if (Math.abs(montoQr + montoEfectivo - total) > 0.01) {
-        return setError(
-          `La suma de QR (Bs ${montoQr.toFixed(2)}) + efectivo (Bs ${montoEfectivo.toFixed(2)}) debe ser igual al total (Bs ${total.toFixed(2)}).`
-        );
+      montoQrTotal = Number(form.montoQr) || 0;
+      montoEfectivoTotal = Number(form.montoEfectivo) || 0;
+      if (Math.abs(montoQrTotal + montoEfectivoTotal - totalComanda) > 0.01) {
+        return setError(`La suma de QR (Bs ${montoQrTotal.toFixed(2)}) + efectivo (Bs ${montoEfectivoTotal.toFixed(2)}) debe ser igual al total (Bs ${totalComanda.toFixed(2)}).`);
       }
     }
 
     setEnviando(true);
     try {
-      await registrarVenta({
-        fecha: fechaHoyISO(),
-        cajera: aperturaActiva.cajera,
-        comanda: form.comanda.trim(),
-        barra: aperturaActiva.barra,
-        mesero: form.mesero.trim(),
-        productoId: productoSel.id,
-        producto: productoSel.nombre,
-        unidad: productoSel.unidadVenta || "Botella",
-        cantidad: Number(form.cantidad),
-        precioUnitario,
-        total,
-        formaPago: form.formaPago,
-        montoQr,
-        montoEfectivo,
-        observaciones: form.observaciones.trim(),
-        complemento: form.complemento.trim(),
-        aperturaId: aperturaActiva.id,
-      });
-      setForm({ ...VACIO, cajera: form.cajera, mesero: form.mesero, barra: form.barra, complemento: "" });
+      let qrRestante = montoQrTotal;
+      let efectivoRestante = montoEfectivoTotal;
+      for (let i = 0; i < productosComanda.length; i += 1) {
+        const item = productosComanda[i];
+        let montoQr = 0;
+        let montoEfectivo = 0;
+        if (form.formaPago === "qr") montoQr = item.total;
+        else if (form.formaPago === "efectivo") montoEfectivo = item.total;
+        else {
+          montoQr = Math.min(qrRestante, item.total);
+          montoEfectivo = item.total - montoQr;
+          qrRestante -= montoQr;
+          efectivoRestante -= montoEfectivo;
+        }
+        await registrarVenta({
+          fecha: fechaHoyISO(), cajera: aperturaActiva.cajera, comanda: form.comanda.trim(),
+          barra: aperturaActiva.barra, mesero: form.mesero.trim(), productoId: item.productoId,
+          producto: item.producto, unidad: item.unidad, cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario, total: item.total, formaPago: form.formaPago,
+          montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
+          complemento: item.complemento, aperturaId: aperturaActiva.id,
+        });
+      }
+      const numeroActual = Number(form.comanda);
+      const siguienteComanda = Number.isFinite(numeroActual) ? String(numeroActual + 1) : "";
+      setProductosComanda([]);
+      setForm((f) => ({ ...VACIO, cajera: aperturaActiva.cajera, barra: aperturaActiva.barra, mesero: f.mesero, comanda: siguienteComanda }));
       setEditandoPrecio(false);
       setPrecioEditado("");
     } catch (err) {
@@ -250,6 +313,9 @@ export default function Ventas() {
         <section className="lista-reciente">
           <h2>Caja abierta</h2>
           <p><strong>{aperturaActiva.cajera}</strong> · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
+          <button type="button" className="boton boton--peligro" onClick={cerrarCajaDelDia} disabled={cerrandoCaja}>
+            {cerrandoCaja ? "Cerrando caja…" : "Cerrar caja del día"}
+          </button>
         </section>
       )}
 
@@ -278,7 +344,7 @@ export default function Ventas() {
             </select>
           </label>
           <label>
-            N° de comanda (opcional)
+            N° de comanda
             <input
               value={form.comanda}
               onChange={(e) => actualizar("comanda", e.target.value)}
@@ -382,7 +448,30 @@ export default function Ventas() {
           </div>
         )}
 
-        <div className="formulario__total">Total: Bs {total.toFixed(2)}</div>
+        <div className="formulario__acciones">
+          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!productoSel || productosComanda.length >= 3}>
+            Agregar producto
+          </button>
+          <span>{productosComanda.length}/3 productos agregados</span>
+        </div>
+
+        {productosComanda.length > 0 && (
+          <section className="lista-reciente">
+            <h3>Productos de la comanda</h3>
+            <table className="tabla">
+              <thead><tr><th>Producto</th><th>Complemento</th><th>Cant.</th><th>Precio</th><th>Total</th><th></th></tr></thead>
+              <tbody>{productosComanda.map((p, i) => (
+                <tr key={`${p.productoId}-${i}`}>
+                  <td>{p.producto}</td><td>{p.complemento || "—"}</td><td>{p.cantidad}</td>
+                  <td>Bs {Number(p.precioUnitario).toFixed(2)}</td><td>Bs {Number(p.total).toFixed(2)}</td>
+                  <td><button type="button" className="boton boton--enlace boton--peligro" onClick={() => quitarProductoComanda(i)}>Quitar</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </section>
+        )}
+
+        <div className="formulario__total">Total comanda: Bs {totalComanda.toFixed(2)}</div>
 
         <div className="formulario__fila">
           <label>
@@ -427,7 +516,7 @@ export default function Ventas() {
                   step="0.01"
                   value={form.montoEfectivo}
                   onChange={(e) => actualizar("montoEfectivo", e.target.value)}
-                  placeholder={total ? total.toFixed(2) : ""}
+                  placeholder={totalComanda ? totalComanda.toFixed(2) : ""}
                 />
               </label>
               <label>
