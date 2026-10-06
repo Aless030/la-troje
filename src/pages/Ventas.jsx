@@ -105,6 +105,28 @@ export default function Ventas() {
     [ventas]
   );
 
+  // Siguiente N° de comanda para cada mesero, según su última venta registrada
+  const siguienteComandaPorMesero = useMemo(() => {
+    const ultimo = {};
+    ventas.forEach((v) => {
+      if (!v.mesero) return;
+      const n = Number(v.comanda);
+      if (!Number.isFinite(n)) return;
+      const t = new Date(v.fecha).getTime() || 0;
+      const prev = ultimo[v.mesero];
+      if (!prev || t > prev.t || (t === prev.t && n > prev.n)) ultimo[v.mesero] = { n, t };
+    });
+    const sig = {};
+    Object.entries(ultimo).forEach(([m, { n }]) => {
+      sig[m] = String(n + 1);
+    });
+    return sig;
+  }, [ventas]);
+
+  function cambiarMesero(mesero) {
+    setForm((f) => ({ ...f, mesero, comanda: siguienteComandaPorMesero[mesero] || "" }));
+  }
+
   function actualizar(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
@@ -126,7 +148,7 @@ export default function Ventas() {
       await registrarAperturaCaja({
         fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
       });
-      setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: meseros[0] || "" }));
+      setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: "", comanda: "" }));
       setMensajeApertura("Caja abierta correctamente.");
     } catch (err) {
       console.error(err);
@@ -270,10 +292,8 @@ export default function Ventas() {
         });
       }
 
-      const numeroActual = Number(form.comanda);
-      const siguienteComanda = Number.isFinite(numeroActual) ? String(numeroActual + 1) : "";
       setProductosComanda([]);
-      setForm((f) => ({ ...VACIO, cajera: aperturaActiva.cajera, barra: aperturaActiva.barra, mesero: f.mesero, comanda: siguienteComanda }));
+      setForm({ ...VACIO, cajera: aperturaActiva.cajera, barra: aperturaActiva.barra, mesero: "", comanda: "" });
       setEditandoPrecio(false);
       setPrecioEditado("");
     } catch (err) {
@@ -374,9 +394,10 @@ export default function Ventas() {
             Nombre del mesero
             <select
               value={form.mesero}
-              onChange={(e) => actualizar("mesero", e.target.value)}
+              onChange={(e) => cambiarMesero(e.target.value)}
               required
             >
+              <option value="">Selecciona un mesero…</option>
               {(aperturaActiva.meseros || []).map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
