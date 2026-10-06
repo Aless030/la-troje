@@ -63,7 +63,8 @@ export default function Ventas() {
   const precioUnitario = editandoPrecio && precioEditado !== "" ? Number(precioEditado) : precioSugerido;
   const totalProducto = precioUnitario * (Number(form.cantidad) || 0);
   const totalComanda = productosComanda.reduce((s, p) => s + Number(p.total || 0), 0);
-  const totalVentaActual = totalComanda + (productoSel ? totalProducto : 0);
+  // Solo cuenta lo que está en la lista de la comanda
+  const totalVentaActual = totalComanda;
 
   const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
   const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - totalVentaActual) : 0;
@@ -220,33 +221,16 @@ export default function Ventas() {
     if (!form.mesero.trim()) return setError("Selecciona el mesero.");
     if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
 
-    const productosARegistrar = [...productosComanda];
-
+    // Aviso para evitar que un producto seleccionado se ignore sin querer
     if (productoSel) {
-      const cantidadActual = Number(form.cantidad) || 0;
-      if (cantidadActual <= 0) return setError("La cantidad debe ser mayor a 0.");
-
-      const yaAgregado = productosComanda
-        .filter((p) => p.productoId === productoSel.id)
-        .reduce((s, p) => s + Number(p.cantidad || 0), 0);
-
-      if (stockDisponible < yaAgregado + cantidadActual) {
-        return setError(`Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" disponibles en esta barra.`);
-      }
-
-      productosARegistrar.push({
-        productoId: productoSel.id,
-        producto: productoSel.nombre,
-        unidad: productoSel.unidadVenta || "Botella",
-        cantidad: cantidadActual,
-        precioUnitario,
-        total: totalProducto,
-        complemento: form.complemento.trim(),
-      });
+      return setError("Tienes un producto seleccionado sin agregar. Pulsa «Agregar producto» o quítalo antes de registrar.");
     }
 
+    // Solo se registra lo que está en la lista de la comanda
+    const productosARegistrar = [...productosComanda];
+
     if (productosARegistrar.length === 0)
-      return setError("Selecciona o agrega al menos un producto a la comanda.");
+      return setError("Agrega al menos un producto a la comanda con el botón «Agregar producto».");
 
     const totalARegistrar = productosARegistrar.reduce((s, p) => s + Number(p.total || 0), 0);
 
@@ -410,7 +394,7 @@ export default function Ventas() {
                 setEditandoPrecio(false);
                 setPrecioEditado("");
               }}
-              required
+              required={productosComanda.length === 0}
             >
               <option value="">Selecciona un producto…</option>
               {productos.map((p) => (
@@ -462,7 +446,7 @@ export default function Ventas() {
               min="1"
               value={form.cantidad}
               onChange={(e) => actualizar("cantidad", e.target.value)}
-              required
+              required={!!productoSel}
             />
           </label>
         </div>
