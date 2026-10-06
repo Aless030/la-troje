@@ -63,9 +63,10 @@ export default function Ventas() {
   const precioUnitario = editandoPrecio && precioEditado !== "" ? Number(precioEditado) : precioSugerido;
   const totalProducto = precioUnitario * (Number(form.cantidad) || 0);
   const totalComanda = productosComanda.reduce((s, p) => s + Number(p.total || 0), 0);
+  const totalVentaActual = totalComanda + (productoSel ? totalProducto : 0);
 
   const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
-  const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - totalComanda) : 0;
+  const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - totalVentaActual) : 0;
 
   const meserosPrevios = useMemo(() => {
     const nombres = new Set(ventas.map((v) => v.mesero).filter(Boolean));
@@ -154,7 +155,6 @@ export default function Ventas() {
 
   function agregarProductoComanda() {
     setError("");
-    if (productosComanda.length >= 3) return setError("Una comanda puede tener como máximo 3 productos.");
     if (!productoSel) return setError("Selecciona un producto para agregar.");
     const cantidad = Number(form.cantidad) || 0;
     if (cantidad <= 0) return setError("La cantidad debe ser mayor a 0.");
@@ -219,26 +219,53 @@ export default function Ventas() {
     if (!aperturaActiva) return setError("Primero debes realizar la apertura de caja.");
     if (!form.mesero.trim()) return setError("Selecciona el mesero.");
     if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
-    if (productosComanda.length === 0) return setError("Agrega al menos un producto a la comanda.");
+
+    const productosARegistrar = [...productosComanda];
+
+    if (productoSel) {
+      const cantidadActual = Number(form.cantidad) || 0;
+      if (cantidadActual <= 0) return setError("La cantidad debe ser mayor a 0.");
+
+      const yaAgregado = productosComanda
+        .filter((p) => p.productoId === productoSel.id)
+        .reduce((s, p) => s + Number(p.cantidad || 0), 0);
+
+      if (stockDisponible < yaAgregado + cantidadActual) {
+        return setError(`Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" disponibles en esta barra.`);
+      }
+
+      productosARegistrar.push({
+        productoId: productoSel.id,
+        producto: productoSel.nombre,
+        unidad: productoSel.unidadVenta || "Botella",
+        cantidad: cantidadActual,
+        precioUnitario,
+        total: totalProducto,
+        complemento: form.complemento.trim(),
+      });
+    }
+
+    if (productosARegistrar.length === 0)
+      return setError("Selecciona o agrega al menos un producto a la comanda.");
+
+    const totalARegistrar = productosARegistrar.reduce((s, p) => s + Number(p.total || 0), 0);
 
     let montoQrTotal = 0;
     let montoEfectivoTotal = 0;
-    if (form.formaPago === "qr") montoQrTotal = totalComanda;
-    if (form.formaPago === "efectivo") montoEfectivoTotal = totalComanda;
+    if (form.formaPago === "qr") montoQrTotal = totalARegistrar;
+    if (form.formaPago === "efectivo") montoEfectivoTotal = totalARegistrar;
     if (form.formaPago === "ambos") {
       montoQrTotal = Number(form.montoQr) || 0;
       montoEfectivoTotal = Number(form.montoEfectivo) || 0;
-      if (Math.abs(montoQrTotal + montoEfectivoTotal - totalComanda) > 0.01) {
-        return setError(`La suma de QR (Bs ${montoQrTotal.toFixed(2)}) + efectivo (Bs ${montoEfectivoTotal.toFixed(2)}) debe ser igual al total (Bs ${totalComanda.toFixed(2)}).`);
+      if (Math.abs(montoQrTotal + montoEfectivoTotal - totalARegistrar) > 0.01) {
+        return setError(`La suma de QR (Bs ${montoQrTotal.toFixed(2)}) + efectivo (Bs ${montoEfectivoTotal.toFixed(2)}) debe ser igual al total (Bs ${totalARegistrar.toFixed(2)}).`);
       }
     }
 
     setEnviando(true);
     try {
       let qrRestante = montoQrTotal;
-      let efectivoRestante = montoEfectivoTotal;
-      for (let i = 0; i < productosComanda.length; i += 1) {
-        const item = productosComanda[i];
+      for (const item of productosARegistrar) {
         let montoQr = 0;
         let montoEfectivo = 0;
         if (form.formaPago === "qr") montoQr = item.total;
@@ -247,8 +274,8 @@ export default function Ventas() {
           montoQr = Math.min(qrRestante, item.total);
           montoEfectivo = item.total - montoQr;
           qrRestante -= montoQr;
-          efectivoRestante -= montoEfectivo;
         }
+
         await registrarVenta({
           fecha: fechaHoyISO(), cajera: aperturaActiva.cajera, comanda: form.comanda.trim(),
           barra: aperturaActiva.barra, mesero: form.mesero.trim(), productoId: item.productoId,
@@ -258,6 +285,7 @@ export default function Ventas() {
           complemento: item.complemento, aperturaId: aperturaActiva.id,
         });
       }
+
       const numeroActual = Number(form.comanda);
       const siguienteComanda = Number.isFinite(numeroActual) ? String(numeroActual + 1) : "";
       setProductosComanda([]);
@@ -449,10 +477,10 @@ export default function Ventas() {
         )}
 
         <div className="formulario__acciones">
-          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!productoSel || productosComanda.length >= 3}>
+          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!productoSel}>
             Agregar producto
           </button>
-          <span>{productosComanda.length}/3 productos agregados</span>
+          <span>{productosComanda.length} producto{productosComanda.length === 1 ? "" : "s"} agregado{productosComanda.length === 1 ? "" : "s"}</span>
         </div>
 
         {productosComanda.length > 0 && (
@@ -471,7 +499,7 @@ export default function Ventas() {
           </section>
         )}
 
-        <div className="formulario__total">Total comanda: Bs {totalComanda.toFixed(2)}</div>
+        <div className="formulario__total">Total comanda: Bs {totalVentaActual.toFixed(2)}</div>
 
         <div className="formulario__fila">
           <label>
@@ -516,7 +544,7 @@ export default function Ventas() {
                   step="0.01"
                   value={form.montoEfectivo}
                   onChange={(e) => actualizar("montoEfectivo", e.target.value)}
-                  placeholder={totalComanda ? totalComanda.toFixed(2) : ""}
+                  placeholder={totalVentaActual ? totalVentaActual.toFixed(2) : ""}
                 />
               </label>
               <label>
