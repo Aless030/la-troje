@@ -220,33 +220,13 @@ export default function Ventas() {
     if (!form.mesero.trim()) return setError("Selecciona el mesero.");
     if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
 
-    const productosARegistrar = [...productosComanda];
-
-    if (productoSel) {
-      const cantidadActual = Number(form.cantidad) || 0;
-      if (cantidadActual <= 0) return setError("La cantidad debe ser mayor a 0.");
-
-      const yaAgregado = productosComanda
-        .filter((p) => p.productoId === productoSel.id)
-        .reduce((s, p) => s + Number(p.cantidad || 0), 0);
-
-      if (stockDisponible < yaAgregado + cantidadActual) {
-        return setError(`Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" disponibles en esta barra.`);
-      }
-
-      productosARegistrar.push({
-        productoId: productoSel.id,
-        producto: productoSel.nombre,
-        unidad: productoSel.unidadVenta || "Botella",
-        cantidad: cantidadActual,
-        precioUnitario,
-        total: totalProducto,
-        complemento: form.complemento.trim(),
-      });
+    // Registrar solamente los productos que ya fueron agregados a la lista.
+    // No se exige ningún producto seleccionado en el formulario.
+    if (productosComanda.length === 0) {
+      return setError("Agrega al menos un producto a la lista antes de registrar la venta.");
     }
 
-    if (productosARegistrar.length === 0)
-      return setError("Selecciona o agrega al menos un producto a la comanda.");
+    const productosARegistrar = [...productosComanda];
 
     const totalARegistrar = productosARegistrar.reduce((s, p) => s + Number(p.total || 0), 0);
 
