@@ -55,7 +55,12 @@ export default function CierreCaja() {
   // Filtro para ver el historial guardado: todos, o solo jueves/viernes/sábado/otro.
   const [filtroDia, setFiltroDia] = useState("todos");
 
-  const ventasHoy = useMemo(() => ventas.filter((v) => esHoy(v.fecha)), [ventas]);
+  // Las cortesías no cuentan como venta: no suman efectivo ni QR ni productos vendidos.
+  const ventasHoyTodas = useMemo(() => ventas.filter((v) => esHoy(v.fecha)), [ventas]);
+  const ventasHoy = useMemo(
+    () => ventasHoyTodas.filter((v) => v.formaPago !== "cortesia"),
+    [ventasHoyTodas]
+  );
 
   const aperturaActiva = useMemo(
     () => aperturasCaja.find((a) => a.estado === "abierta" && esHoy(a.fecha)) || null,
@@ -94,7 +99,9 @@ export default function CierreCaja() {
   }, [ventasHoy]);
 
   const cajaChica = Number(aperturaActiva?.cajaChica || 0);
-  const efectivoDeVenta = Math.max(0, resumen.totalEfectivo - totalGastos);
+  // Efectivo a entregar (lo que se da físico, en mano):
+  // Total general − QR − Gastos = efectivo de venta; más la caja chica con que se abrió.
+  const efectivoDeVenta = resumen.totalGeneral - resumen.totalQr - totalGastos;
   const efectivoAEntregar = efectivoDeVenta + cajaChica;
 
   const historialFiltrado = useMemo(
@@ -204,7 +211,7 @@ export default function CierreCaja() {
           <span className="tarjeta-metrica__valor">Bs {resumen.totalEfectivo.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">QR</span>
+          <span className="tarjeta-metrica__etiqueta">QR (se resta, no se entrega en mano)</span>
           <span className="tarjeta-metrica__valor">Bs {resumen.totalQr.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica tarjeta-metrica--destacada">
@@ -212,11 +219,11 @@ export default function CierreCaja() {
           <span className="tarjeta-metrica__valor">Bs {resumen.totalGeneral.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Gastos (se restan solo del efectivo)</span>
+          <span className="tarjeta-metrica__etiqueta">Gastos (se restan del efectivo)</span>
           <span className="tarjeta-metrica__valor">Bs {totalGastos.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Efectivo de venta</span>
+          <span className="tarjeta-metrica__etiqueta">Efectivo de venta (Total − QR − Gastos)</span>
           <span className="tarjeta-metrica__valor">Bs {efectivoDeVenta.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica">
@@ -224,7 +231,7 @@ export default function CierreCaja() {
           <span className="tarjeta-metrica__valor">Bs {cajaChica.toFixed(2)}</span>
         </div>
         <div className="tarjeta-metrica tarjeta-metrica--destacada">
-          <span className="tarjeta-metrica__etiqueta">Efectivo a entregar</span>
+          <span className="tarjeta-metrica__etiqueta">Efectivo a entregar en mano (efectivo de venta + caja chica)</span>
           <span className="tarjeta-metrica__valor">Bs {efectivoAEntregar.toFixed(2)}</span>
         </div>
       </div>
@@ -290,7 +297,7 @@ export default function CierreCaja() {
         <button
           className="boton boton--primario"
           onClick={guardarRegistro}
-          disabled={guardando || ventasHoy.length === 0 || !aperturaActiva}
+          disabled={guardando || ventasHoyTodas.length === 0 || !aperturaActiva}
         >
           {guardando ? "Guardando…" : "Guardar registro del día"}
         </button>

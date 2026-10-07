@@ -69,6 +69,8 @@ export default function Ventas() {
   const efectivoRecibido = form.formaPago === "efectivo" ? Number(form.montoEfectivo) || 0 : 0;
   const cambio = form.formaPago === "efectivo" && efectivoRecibido > 0 ? Math.max(0, efectivoRecibido - totalVentaActual) : 0;
 
+  const esCortesia = form.formaPago === "cortesia";
+
   const meserosPrevios = useMemo(() => {
     const nombres = new Set(ventas.map((v) => v.mesero).filter(Boolean));
     return Array.from(nombres);
@@ -276,7 +278,9 @@ export default function Ventas() {
         let montoEfectivo = 0;
         if (form.formaPago === "qr") montoQr = item.total;
         else if (form.formaPago === "efectivo") montoEfectivo = item.total;
-        else {
+        else if (form.formaPago === "cortesia") {
+          // Cortesía: no entra dinero, ni QR ni efectivo.
+        } else {
           montoQr = Math.min(qrRestante, item.total);
           montoEfectivo = item.total - montoQr;
           qrRestante -= montoQr;
@@ -286,7 +290,11 @@ export default function Ventas() {
           fecha: fechaHoyISO(), cajera: aperturaActiva.cajera, comanda: form.comanda.trim(),
           barra: aperturaActiva.barra, mesero: form.mesero.trim(), productoId: item.productoId,
           producto: item.producto, unidad: item.unidad, cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario, total: item.total, formaPago: form.formaPago,
+          precioUnitario: item.precioUnitario,
+          // En cortesía el total es 0 (no se suma a nada); el precio de la botella queda en valorCortesia solo para consulta.
+          total: esCortesia ? 0 : item.total,
+          valorCortesia: esCortesia ? item.total : 0,
+          formaPago: form.formaPago,
           montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
           complemento: item.complemento, aperturaId: aperturaActiva.id,
         });
@@ -504,7 +512,11 @@ export default function Ventas() {
           </section>
         )}
 
-        <div className="formulario__total">Total comanda: Bs {totalVentaActual.toFixed(2)}</div>
+        <div className="formulario__total">
+          {esCortesia
+            ? `Cortesía — valor de referencia: Bs ${totalVentaActual.toFixed(2)} (no se cobra)`
+            : `Total comanda: Bs ${totalVentaActual.toFixed(2)}`}
+        </div>
 
         <div className="formulario__fila">
           <label>
@@ -516,6 +528,7 @@ export default function Ventas() {
               <option value="efectivo">Efectivo</option>
               <option value="qr">QR</option>
               <option value="ambos">Ambos</option>
+              <option value="cortesia">Cortesía</option>
             </select>
           </label>
           {form.formaPago === "ambos" && (
@@ -608,6 +621,7 @@ export default function Ventas() {
           <table className="tabla">
             <thead>
               <tr>
+                <th>Comanda</th>
                 <th>Hora</th>
                 <th>Barra</th>
                 <th>Mesero</th>
@@ -621,13 +635,18 @@ export default function Ventas() {
             <tbody>
               {ventasHoy.map((v) => (
                 <tr key={v.id}>
+                  <td>{v.comanda || "—"}</td>
                   <td>{new Date(v.fecha).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}</td>
                   <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
                   <td>{v.mesero}</td>
                   <td>{v.producto}</td>
                   <td className="tabla__etiqueta">{v.unidad || "—"}</td>
                   <td>{v.cantidad}</td>
-                  <td>Bs {Number(v.total).toFixed(2)}</td>
+                  <td>
+                    {v.formaPago === "cortesia"
+                      ? `Cortesía (Bs ${Number(v.valorCortesia || 0).toFixed(2)})`
+                      : `Bs ${Number(v.total).toFixed(2)}`}
+                  </td>
                   <td className="tabla__etiqueta">{v.formaPago}</td>
                 </tr>
               ))}

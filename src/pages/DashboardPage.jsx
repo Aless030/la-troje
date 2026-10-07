@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,8 +15,26 @@ import { useData } from "../context/DataContext";
 
 const COLORES = ["#C9973E", "#8B4B33", "#4C6444", "#3A2A1E", "#B4432D", "#6B7A52"];
 
+function dentroDeRango(fechaIso, desde, hasta) {
+  const f = new Date(fechaIso).getTime();
+  if (desde && f < new Date(desde + "T00:00:00").getTime()) return false;
+  if (hasta && f > new Date(hasta + "T23:59:59").getTime()) return false;
+  return true;
+}
+
 export default function DashboardPage() {
-  const { ventas, productos } = useData();
+  const { ventas: todasLasVentas, productos } = useData();
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+
+  // Filtra por fechas y deja fuera las cortesías (no son venta ni se suman).
+  const ventas = useMemo(
+    () =>
+      todasLasVentas.filter(
+        (v) => v.formaPago !== "cortesia" && dentroDeRango(v.fecha, desde, hasta)
+      ),
+    [todasLasVentas, desde, hasta]
+  );
 
   const datos = useMemo(() => {
     const porProducto = {};
@@ -59,8 +77,35 @@ export default function DashboardPage() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Dashboard</h1>
-        <p>Métricas generales de todo el histórico registrado.</p>
+        <p>
+          {desde || hasta
+            ? "Métricas del rango de fechas seleccionado."
+            : "Métricas de todo el histórico registrado. Filtra por fecha si quieres ver un período."}
+        </p>
       </header>
+
+      <div className="formulario__fila">
+        <label>
+          Desde
+          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+        </label>
+        <label>
+          Hasta
+          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+        </label>
+        {(desde || hasta) && (
+          <button
+            type="button"
+            className="boton boton--fantasma"
+            onClick={() => {
+              setDesde("");
+              setHasta("");
+            }}
+          >
+            Quitar filtro
+          </button>
+        )}
+      </div>
 
       <div className="tarjetas-resumen">
         <div className="tarjeta-metrica">
@@ -89,7 +134,7 @@ export default function DashboardPage() {
         <div className="panel-grafico">
           <h2>Top 5 productos por cantidad vendida</h2>
           {datos.top5.length === 0 ? (
-            <p className="texto-vacio">Todavía no hay ventas registradas.</p>
+            <p className="texto-vacio">No hay ventas en este período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={datos.top5}>
@@ -110,7 +155,7 @@ export default function DashboardPage() {
         <div className="panel-grafico">
           <h2>Efectivo vs QR</h2>
           {datos.totalIngresos === 0 ? (
-            <p className="texto-vacio">Todavía no hay ventas registradas.</p>
+            <p className="texto-vacio">No hay ventas en este período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
@@ -140,7 +185,7 @@ export default function DashboardPage() {
           </span>
         </div>
         <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Valor del inventario actual</span>
+          <span className="tarjeta-metrica__etiqueta">Valor del inventario actual (no depende del filtro)</span>
           <span className="tarjeta-metrica__valor">Bs {datos.valorInventario.toFixed(2)}</span>
         </div>
       </div>
