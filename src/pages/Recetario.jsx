@@ -1,26 +1,33 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import { DOSIS_CASA, consumoIngrediente, volumenEnMl } from "../utils/dosis";
 
 const UNIDADES = [
   { valor: "ml", etiqueta: "ml" },
+  { valor: "dosis", etiqueta: "dosis / vaso de la casa" },
   { valor: "unidad", etiqueta: "unidad(es)" },
 ];
 
 const INGREDIENTE_VACIO = { productoId: "", cantidad: "", unidad: "ml" };
 const VACIO = { nombre: "", precioVenta: "", ingredientes: [{ ...INGREDIENTE_VACIO }] };
 
-// Costo de un ingrediente según su unidad: si es "ml", el precio del producto se
-// prorratea por su volumen (precio de la botella / ml de la botella); si es
-// "unidad", se cobra el precio completo del producto por cada unidad usada.
+// Costo de un ingrediente: precio de la botella/unidad por la fracción que se gasta
+// (ml -> ml / volumen de la botella; dosis -> dosis / dosis por botella de la casa;
+// unidad -> unidades completas).
 function costoIngrediente(producto, cantidad, unidad) {
   if (!producto || !cantidad) return 0;
   const precio = Number(producto.precio) || 0;
-  if (unidad === "ml") {
-    const volumen = Number(producto.volumenCantidad) || 0;
-    if (volumen <= 0) return 0;
-    return (precio / volumen) * cantidad;
+  return precio * consumoIngrediente(producto, cantidad, unidad);
+}
+
+// Por qué no se puede calcular el consumo de un ingrediente (para avisar al guardar).
+function problemaIngrediente(producto, cantidad, unidad) {
+  if (consumoIngrediente(producto, cantidad, unidad) > 0) return "";
+  if (unidad === "dosis") {
+    return `"${producto?.nombre}" no tiene dosis de la casa definidas para su tamaño (${volumenEnMl(producto) || "sin volumen"} ml). Usa ml o unidades.`;
   }
-  return precio * cantidad;
+  if (unidad === "ml") return `"${producto?.nombre}" no tiene volumen cargado en Inventario, no se puede usar en ml.`;
+  return `Revisa la cantidad de "${producto?.nombre}".`;
 }
 
 export default function Recetario() {
@@ -66,6 +73,14 @@ export default function Recetario() {
 
     const ingredientesValidos = form.ingredientes.filter((i) => i.productoId && Number(i.cantidad) > 0);
     if (ingredientesValidos.length === 0) return setError("Agrega al menos un ingrediente con cantidad.");
+
+    if (!(Number(form.precioVenta) > 0)) return setError("Ingresa el precio de venta del trago (es lo que se cobra en Ventas).");
+
+    for (const ing of ingredientesValidos) {
+      const producto = productos.find((p) => p.id === ing.productoId);
+      const problema = problemaIngrediente(producto, Number(ing.cantidad), ing.unidad);
+      if (problema) return setError(problema);
+    }
 
     const ingredientes = ingredientesValidos.map((i) => {
       const producto = productos.find((p) => p.id === i.productoId);
@@ -121,8 +136,34 @@ export default function Recetario() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Recetario y tragos</h1>
-        <p>Arma cada trago con sus ingredientes para saber cuánto cuesta prepararlo.</p>
+        <p>Cada trago que guardes aparece en Ventas para venderlo, y al venderlo descuenta del inventario lo que gasta (por ejemplo, 15 tragos con 50 ml de ron gastan 750 ml, casi una botella).</p>
       </header>
+
+      <section className="lista-reciente">
+        <h2>Dosis de la casa</h2>
+        <p className="texto-vacio">
+          Según el tamaño de la botella cargada en Inventario. Al armar un trago, elige la unidad «dosis / vaso de la
+          casa» y el sistema descuenta la fracción de botella que corresponde.
+        </p>
+        <table className="tabla">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Rinde</th>
+              <th>Cada dosis / vaso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DOSIS_CASA.map((d) => (
+              <tr key={d.botellaMl}>
+                <td>{d.nombre}</td>
+                <td>{d.detalle}</td>
+                <td>{(d.botellaMl / d.dosis).toFixed(0)} ml</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <form className="formulario" onSubmit={enviar}>
         <div className="formulario__fila">
@@ -136,11 +177,12 @@ export default function Recetario() {
             />
           </label>
           <label>
-            Precio de venta (opcional)
+            Precio de venta (Bs)
             <input
               type="number"
               step="0.01"
               min="0"
+              required
               value={form.precioVenta}
               onChange={(e) => setForm((f) => ({ ...f, precioVenta: e.target.value }))}
               placeholder="Ej: 35"
@@ -152,6 +194,7 @@ export default function Recetario() {
         {form.ingredientes.map((ing, i) => {
           const producto = productos.find((p) => p.id === ing.productoId);
           const costo = costoIngrediente(producto, Number(ing.cantidad) || 0, ing.unidad);
+          const descuenta = consumoIngrediente(producto, Number(ing.cantidad) || 0, ing.unidad);
           return (
             <div className="formulario__fila" key={i}>
               <label>
@@ -184,6 +227,10 @@ export default function Recetario() {
                     <option key={u.valor} value={u.valor}>{u.etiqueta}</option>
                   ))}
                 </select>
+              </label>
+              <label>
+                Descuenta del inventario
+                <input type="text" value={`${descuenta.toFixed(4)} botella(s)`} disabled />
               </label>
               <label>
                 Costo

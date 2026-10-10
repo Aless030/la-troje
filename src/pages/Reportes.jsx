@@ -62,7 +62,9 @@ export default function Reportes() {
         mapa[v.producto] = {
           producto: v.producto,
           cantidad: 0,
-          existencia: productoInventario
+          existencia: v.recetaId
+            ? "—"
+            : productoInventario
             ? Number(productoInventario.stock || 0) +
               Number(productoInventario.stockInterior || 0) +
               Number(productoInventario.stockSemicubierto || 0)
@@ -153,7 +155,15 @@ export default function Reportes() {
   const ventaPorProducto = useMemo(() => {
     const mapa = {};
     ventasFiltradas.forEach((v) => {
-      mapa[v.productoId] = (mapa[v.productoId] || 0) + v.cantidad;
+      // Un trago gasta cada ingrediente de su receta (en fracciones de botella);
+      // un producto normal gasta su cantidad.
+      if (Array.isArray(v.consumo) && v.consumo.length > 0) {
+        v.consumo.forEach((c) => {
+          mapa[c.productoId] = (mapa[c.productoId] || 0) + Number(c.cantidad || 0);
+        });
+      } else {
+        mapa[v.productoId] = (mapa[v.productoId] || 0) + v.cantidad;
+      }
     });
     return mapa;
   }, [ventasFiltradas]);
@@ -459,7 +469,7 @@ export default function Reportes() {
                           }
                         />
                       </td>
-                      <td>{f.venta}</td>
+                      <td>{Number(f.venta).toFixed(2)}</td>
                       <td>{f.final.toFixed(2)}</td>
                       <td>
                         <input

@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import ReporteCierre from "../components/ReporteCierre";
+import { buscarAperturaActiva, cerrarTurno } from "../utils/cierre";
+import { consumoReceta, formatearStock, redondear4, tragosDisponibles } from "../utils/dosis";
 
 function fechaHoyISO() {
   return new Date().toISOString();
@@ -41,7 +44,7 @@ const VACIO = {
 
 export default function Ventas() {
   const {
-    productos, ventas, aperturasCaja, gastosCaja,
+    productos, recetas, ventas, aperturasCaja, gastosCaja,
     registrarVenta, registrarAperturaCaja, registrarGastoCaja, registrarCierre, cerrarAperturaCaja
   } = useData();
   const [form, setForm] = useState(VACIO);
@@ -55,11 +58,28 @@ export default function Ventas() {
   const [mensajeGasto, setMensajeGasto] = useState("");
   const [productosComanda, setProductosComanda] = useState([]);
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
+  const [abriendo, setAbriendo] = useState(false);
+  const [reporteCierre, setReporteCierre] = useState(null);
 
-  const campoActivo = campoBarra(form.barra);
+  // Caja abierta (la más reciente de las últimas 24 h).
+  const aperturaActiva = useMemo(() => buscarAperturaActiva(aperturasCaja), [aperturasCaja]);
+
+  // La barra activa es la de la caja abierta (así no depende del formulario al recargar).
+  const campoActivo = campoBarra(aperturaActiva?.barra || form.barra);
   const productoSel = productos.find((p) => p.id === form.productoId);
-  const stockDisponible = productoSel ? productoSel[campoActivo] || 0 : 0;
-  const precioSugerido = productoSel ? (productoSel.precioVenta ?? productoSel.precio ?? 0) : 0;
+  // Los tragos de Recetario también se venden: se eligen como "receta:<id>".
+  const tragoSel = recetas.find((r) => `receta:${r.id}` === form.productoId);
+  const itemSel = productoSel || tragoSel || null;
+  const stockDisponible = productoSel
+    ? Number(productoSel[campoActivo] || 0)
+    : tragoSel
+    ? tragosDisponibles(tragoSel, productos, campoActivo)
+    : 0;
+  const precioSugerido = productoSel
+    ? (productoSel.precioVenta ?? productoSel.precio ?? 0)
+    : tragoSel
+    ? Number(tragoSel.precioVenta || 0)
+    : 0;
   const precioUnitario = editandoPrecio && precioEditado !== "" ? Number(precioEditado) : precioSugerido;
   const totalProducto = precioUnitario * (Number(form.cantidad) || 0);
   const totalComanda = productosComanda.reduce((s, p) => s + Number(p.total || 0), 0);
@@ -81,10 +101,44 @@ export default function Ventas() {
     return Array.from(nombres);
   }, [ventas]);
 
-  const aperturaActiva = useMemo(
-    () => aperturasCaja.find((a) => a.estado === "abierta" && esHoy(a.fecha)) || null,
-    [aperturasCaja]
+  const tragosLista = useMemo(
+    () =>
+      recetas
+        .map((r) => ({ receta: r, disponibles: tragosDisponibles(r, productos, campoActivo) }))
+        .sort((a, b) => (a.receta.nombre || "").localeCompare(b.receta.nombre || "", "es")),
+    [recetas, productos, campoActivo]
   );
+
+  // Qué productos del inventario gasta una línea de la comanda (un trago gasta
+  // cada ingrediente de su receta, en fracciones de botella).
+  function consumoDeLinea(linea) {
+    if (linea.recetaId) {
+      const receta = recetas.find((r) => r.id === linea.recetaId);
+      return consumoReceta(receta, productos).map((c) => ({
+        productoId: c.productoId,
+        cantidad: c.cantidad * Number(linea.cantidad || 0),
+      }));
+    }
+    return [{ productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) }];
+  }
+
+  // Revisa que alcance el inventario de la barra para todas las líneas juntas.
+  function validarStock(lineas) {
+    const total = {};
+    lineas.forEach((l) =>
+      consumoDeLinea(l).forEach((c) => {
+        total[c.productoId] = (total[c.productoId] || 0) + c.cantidad;
+      })
+    );
+    for (const [id, necesario] of Object.entries(total)) {
+      const p = productos.find((x) => x.id === id);
+      const hay = Number(p?.[campoActivo] || 0);
+      if (hay + 1e-9 < necesario) {
+        return `No alcanza "${p?.nombre || "producto"}" en esta barra: hay ${formatearStock(hay)} y se necesita ${formatearStock(necesario)}.`;
+      }
+    }
+    return "";
+  }
 
   const cajerasAperturaPrevias = useMemo(() => {
     const nombres = new Set([
@@ -139,6 +193,7 @@ export default function Ventas() {
 
   async function abrirCaja(e) {
     e.preventDefault();
+    if (abriendo) return;
     setMensajeApertura("");
     const cajera = aperturaForm.cajera.trim();
     const meseros = aperturaForm.meseros.split(",").map((m) => m.trim()).filter(Boolean);
@@ -146,15 +201,18 @@ export default function Ventas() {
     if (!cajera) return setMensajeApertura("Escribe el nombre de la persona que abre la caja.");
     if (cajaChica < 0) return setMensajeApertura("La caja chica no puede ser negativa.");
     if (meseros.length === 0) return setMensajeApertura("Escribe al menos un mesero.");
+    setAbriendo(true);
     try {
       await registrarAperturaCaja({
         fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
       });
+      setReporteCierre(null);
       setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: "", comanda: "" }));
-      setMensajeApertura("Caja abierta correctamente.");
     } catch (err) {
       console.error(err);
-      setMensajeApertura("No se pudo abrir la caja.");
+      setMensajeApertura(err?.message === "Ya hay una caja abierta." ? err.message : "No se pudo abrir la caja.");
+    } finally {
+      setAbriendo(false);
     }
   }
 
@@ -180,24 +238,28 @@ export default function Ventas() {
 
   function agregarProductoComanda() {
     setError("");
-    if (!productoSel) return setError("Selecciona un producto para agregar.");
+    if (!itemSel) return setError("Selecciona un producto o trago para agregar.");
     const cantidad = Number(form.cantidad) || 0;
     if (cantidad <= 0) return setError("La cantidad debe ser mayor a 0.");
-    const yaAgregado = productosComanda
-      .filter((p) => p.productoId === productoSel.id)
-      .reduce((s, p) => s + Number(p.cantidad || 0), 0);
-    if (stockDisponible < yaAgregado + cantidad) {
-      return setError(`Solo hay ${stockDisponible} unidades de "${productoSel.nombre}" disponibles en esta barra.`);
+    if (tragoSel && consumoReceta(tragoSel, productos).length === 0) {
+      return setError(`El trago "${tragoSel.nombre}" no tiene ingredientes válidos. Revísalo en Recetario.`);
     }
-    setProductosComanda((lista) => [...lista, {
-      productoId: productoSel.id,
-      producto: productoSel.nombre,
-      unidad: productoSel.unidadVenta || "Botella",
+    if (tragoSel && !esCortesia && precioUnitario <= 0) {
+      return setError(`El trago "${tragoSel.nombre}" no tiene precio de venta. Usa «Cambiar» para ponerle precio.`);
+    }
+    const nueva = {
+      productoId: productoSel ? productoSel.id : `receta:${tragoSel.id}`,
+      recetaId: tragoSel ? tragoSel.id : null,
+      producto: itemSel.nombre,
+      unidad: tragoSel ? "Trago" : productoSel.unidadVenta || "Botella",
       cantidad,
       precioUnitario,
       total: totalProducto,
       complemento: form.complemento.trim(),
-    }]);
+    };
+    const errorStock = validarStock([...productosComanda, nueva]);
+    if (errorStock) return setError(errorStock);
+    setProductosComanda((lista) => [...lista, nueva]);
     setForm((f) => ({ ...f, productoId: "", cantidad: 1, complemento: "" }));
     setEditandoPrecio(false);
     setPrecioEditado("");
@@ -209,27 +271,21 @@ export default function Ventas() {
 
   async function cerrarCajaDelDia() {
     if (!aperturaActiva || cerrandoCaja) return;
-    if (!window.confirm("¿Cerrar la caja de hoy? Después tendrás que hacer una nueva apertura para seguir vendiendo.")) return;
+    if (!window.confirm("¿Cerrar la caja? Se generará el reporte de la cajera y después tendrás que hacer una nueva apertura para seguir vendiendo.")) return;
     setCerrandoCaja(true);
     setError("");
     try {
-      const ventasCaja = ventas.filter((v) => v.aperturaId === aperturaActiva.id);
-      const gastosDeCaja = gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id);
-      const totalEfectivo = ventasCaja.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0);
-      const totalQr = ventasCaja.reduce((s, v) => s + Number(v.montoQr || 0), 0);
-      const totalGastos = gastosDeCaja.reduce((s, g) => s + Number(g.monto || 0), 0);
-      const cajaChica = Number(aperturaActiva.cajaChica || 0);
-      const efectivoNeto = totalEfectivo - totalGastos;
-      const efectivoEntregar = efectivoNeto + cajaChica;
-      const fechaCierre = fechaHoyISO();
-      await registrarCierre({
-        fecha: fechaCierre, aperturaId: aperturaActiva.id, cajera: aperturaActiva.cajera,
-        barra: aperturaActiva.barra, cajaChica, totalEfectivo, totalQr,
-        totalGeneral: totalEfectivo + totalQr, totalGastos, efectivoNeto, efectivoEntregar,
+      const cierre = await cerrarTurno({
+        apertura: aperturaActiva, ventas, gastosCaja, aperturasCaja, registrarCierre, cerrarAperturaCaja,
       });
-      await cerrarAperturaCaja(aperturaActiva.id, { fechaCierre, totalEfectivo, totalQr, totalGastos, efectivoEntregar });
+      setReporteCierre(cierre);
       setProductosComanda([]);
       setForm(VACIO);
+      // Limpia mensajes y formularios para que no parezca que la caja se abrió otra vez.
+      setMensajeApertura("");
+      setMensajeGasto("");
+      setGastoForm({ concepto: "", monto: "", observaciones: "" });
+      setAperturaForm({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
     } catch (err) {
       console.error(err);
       setError("No se pudo cerrar la caja. Intenta de nuevo.");
@@ -246,7 +302,7 @@ export default function Ventas() {
     if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
 
     // Aviso para evitar que un producto seleccionado se ignore sin querer
-    if (productoSel) {
+    if (itemSel) {
       return setError("Tienes un producto seleccionado sin agregar. Pulsa «Agregar producto» o quítalo antes de registrar.");
     }
 
@@ -255,6 +311,9 @@ export default function Ventas() {
 
     if (productosARegistrar.length === 0)
       return setError("Agrega al menos un producto a la comanda con el botón «Agregar producto».");
+
+    const errorStock = validarStock(productosARegistrar);
+    if (errorStock) return setError(errorStock);
 
     const totalARegistrar = productosARegistrar.reduce((s, p) => s + Number(p.total || 0), 0);
 
@@ -297,6 +356,10 @@ export default function Ventas() {
           formaPago: form.formaPago,
           montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
           complemento: item.complemento, aperturaId: aperturaActiva.id,
+          recetaId: item.recetaId || null,
+          consumo: item.recetaId
+            ? consumoDeLinea(item).map((c) => ({ productoId: c.productoId, cantidad: redondear4(c.cantidad) }))
+            : [],
         });
       }
 
@@ -318,6 +381,14 @@ export default function Ventas() {
         <h1>Venta</h1>
         <p>{new Date().toLocaleString("es-BO", { dateStyle: "full", timeStyle: "short" })}</p>
       </header>
+
+      {reporteCierre && (
+        <ReporteCierre
+          cierre={reporteCierre}
+          titulo="Turno cerrado — reporte de la cajera"
+          onCerrar={() => setReporteCierre(null)}
+        />
+      )}
 
       {!aperturaActiva ? (
         <form className="formulario" onSubmit={abrirCaja}>
@@ -347,14 +418,16 @@ export default function Ventas() {
             </label>
           </div>
           {mensajeApertura && <div className="formulario__error">{mensajeApertura}</div>}
-          <button type="submit" className="boton boton--primario">Abrir caja</button>
+          <button type="submit" className="boton boton--primario" disabled={abriendo}>
+            {abriendo ? "Abriendo caja…" : "Abrir caja"}
+          </button>
         </form>
       ) : (
         <section className="lista-reciente">
           <h2>Caja abierta</h2>
-          <p><strong>{aperturaActiva.cajera}</strong> · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
+          <p><strong>{aperturaActiva.cajera}</strong> · Abrió: {new Date(aperturaActiva.fecha).toLocaleString("es-BO")} · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
           <button type="button" className="boton boton--peligro" onClick={cerrarCajaDelDia} disabled={cerrandoCaja}>
-            {cerrandoCaja ? "Cerrando caja…" : "Cerrar caja del día"}
+            {cerrandoCaja ? "Cerrando caja…" : "Cerrar caja y ver reporte"}
           </button>
         </section>
       )}
@@ -426,16 +499,27 @@ export default function Ventas() {
               required={productosComanda.length === 0}
             >
               <option value="">Selecciona un producto…</option>
-              {productos.map((p) => (
-                <option key={p.id} value={p.id} disabled={(p[campoActivo] ?? 0) <= 0}>
-                  {p.nombre} {(p[campoActivo] ?? 0) <= 0 ? "(sin stock aquí)" : `— stock: ${p[campoActivo] ?? 0}`}
-                </option>
-              ))}
+              <optgroup label="Productos">
+                {productos.map((p) => (
+                  <option key={p.id} value={p.id} disabled={(p[campoActivo] ?? 0) <= 0}>
+                    {p.nombre} {(p[campoActivo] ?? 0) <= 0 ? "(sin stock aquí)" : `— stock: ${formatearStock(p[campoActivo])}`}
+                  </option>
+                ))}
+              </optgroup>
+              {tragosLista.length > 0 && (
+                <optgroup label="Tragos (Recetario)">
+                  {tragosLista.map(({ receta, disponibles }) => (
+                    <option key={receta.id} value={`receta:${receta.id}`} disabled={disponibles <= 0}>
+                      {receta.nombre} {disponibles <= 0 ? "(sin insumos aquí)" : `— alcanza para: ${disponibles}`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
           <label>
             Unidad
-            <input type="text" value={productoSel?.unidadVenta || "—"} disabled />
+            <input type="text" value={tragoSel ? "Trago" : productoSel?.unidadVenta || "—"} disabled />
           </label>
           <label>
             Precio de venta
@@ -461,7 +545,7 @@ export default function Ventas() {
                     setPrecioEditado(String(precioSugerido || ""));
                     setEditandoPrecio(true);
                   }}
-                  disabled={!productoSel}
+                  disabled={!itemSel}
                 >
                   Cambiar
                 </button>
@@ -475,12 +559,12 @@ export default function Ventas() {
               min="1"
               value={form.cantidad}
               onChange={(e) => actualizar("cantidad", e.target.value)}
-              required={!!productoSel}
+              required={!!itemSel}
             />
           </label>
         </div>
 
-        {productoSel && (
+        {itemSel && (
           <div className="formulario__fila">
             <label>
               Complemento (opcional)
@@ -490,7 +574,7 @@ export default function Ventas() {
         )}
 
         <div className="formulario__acciones">
-          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!productoSel}>
+          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!itemSel}>
             Agregar producto
           </button>
           <span>{productosComanda.length} producto{productosComanda.length === 1 ? "" : "s"} agregado{productosComanda.length === 1 ? "" : "s"}</span>

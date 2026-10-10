@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
-import { descargarPDF } from "../utils/pdf";
+import ReporteCierre from "../components/ReporteCierre";
+import { buscarAperturaActiva, cerrarTurno, construirCierre } from "../utils/cierre";
 
 const ETIQUETAS_DIA = {
   jueves: "Jueves",
@@ -9,25 +10,7 @@ const ETIQUETAS_DIA = {
   otro: "Otro",
 };
 
-// Jueves=4, viernes=5, sábado=6 en getDay(). Cualquier otro día cae en "otro".
-function diaSemanaDesdeFecha(fechaIso) {
-  const dia = new Date(fechaIso).getDay();
-  if (dia === 4) return "jueves";
-  if (dia === 5) return "viernes";
-  if (dia === 6) return "sabado";
-  return "otro";
-}
-
-function esHoy(fechaIso) {
-  if (!fechaIso) return false;
-  const hoy = new Date();
-  const f = new Date(fechaIso);
-  return (
-    f.getFullYear() === hoy.getFullYear() &&
-    f.getMonth() === hoy.getMonth() &&
-    f.getDate() === hoy.getDate()
-  );
-}
+const bs = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
 
 function formatoFechaLarga(fechaIso) {
   return new Date(fechaIso).toLocaleDateString("es-BO", {
@@ -41,113 +24,46 @@ function formatoFechaLarga(fechaIso) {
 export default function CierreCaja() {
   const {
     ventas, cierres, aperturasCaja, gastosCaja,
-    registrarCierre, eliminarCierre, limpiarCierresAntiguos, cerrarAperturaCaja
+    registrarCierre, eliminarCierre, limpiarCierresAntiguos, cerrarAperturaCaja,
   } = useData();
 
-  const [guardando, setGuardando] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
   const [mensaje, setMensaje] = useState("");
-
-  // Día del evento que se está registrando: se sugiere solo según la fecha de hoy,
-  // pero el usuario puede cambiarlo (por si el evento cae en otro día distinto).
-  const [diaSeleccionado, setDiaSeleccionado] = useState(diaSemanaDesdeFecha(new Date().toISOString()));
-  const [diaPersonalizado, setDiaPersonalizado] = useState("");
-
-  // Filtro para ver el historial guardado: todos, o solo jueves/viernes/sábado/otro.
   const [filtroDia, setFiltroDia] = useState("todos");
+  // Reporte que se está mirando: el que se generó al cerrar, o uno del historial.
+  const [reporteVisto, setReporteVisto] = useState(null);
 
-  // Las cortesías no cuentan como venta: no suman efectivo ni QR ni productos vendidos.
-  const ventasHoyTodas = useMemo(() => ventas.filter((v) => esHoy(v.fecha)), [ventas]);
-  const ventasHoy = useMemo(
-    () => ventasHoyTodas.filter((v) => v.formaPago !== "cortesia"),
-    [ventasHoyTodas]
+  const aperturaActiva = useMemo(() => buscarAperturaActiva(aperturasCaja), [aperturasCaja]);
+
+  // Vista previa en vivo del turno abierto (aún no está cerrado).
+  const vistaPrevia = useMemo(
+    () =>
+      aperturaActiva
+        ? { ...construirCierre({ apertura: aperturaActiva, ventas, gastosCaja }), cerrado: false }
+        : null,
+    [aperturaActiva, ventas, gastosCaja]
   );
-
-  const aperturaActiva = useMemo(
-    () => aperturasCaja.find((a) => a.estado === "abierta" && esHoy(a.fecha)) || null,
-    [aperturasCaja]
-  );
-
-  const gastosApertura = useMemo(
-    () => aperturaActiva ? gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id) : [],
-    [gastosCaja, aperturaActiva]
-  );
-
-  const totalGastos = useMemo(
-    () => gastosApertura.reduce((s, g) => s + Number(g.monto || 0), 0),
-    [gastosApertura]
-  );
-
-  const resumen = useMemo(() => {
-    const totalQr = ventasHoy.reduce((s, v) => s + (v.montoQr || 0), 0);
-    const totalEfectivo = ventasHoy.reduce((s, v) => s + (v.montoEfectivo || 0), 0);
-
-    const porProducto = {};
-    ventasHoy.forEach((v) => {
-      if (!porProducto[v.producto]) {
-        porProducto[v.producto] = { producto: v.producto, cantidad: 0, total: 0 };
-      }
-      porProducto[v.producto].cantidad += v.cantidad;
-      porProducto[v.producto].total += v.total;
-    });
-
-    return {
-      totalQr,
-      totalEfectivo,
-      totalGeneral: totalQr + totalEfectivo,
-      productos: Object.values(porProducto).sort((a, b) => b.cantidad - a.cantidad),
-    };
-  }, [ventasHoy]);
-
-  const cajaChica = Number(aperturaActiva?.cajaChica || 0);
-  // Efectivo a entregar (lo que se da físico, en mano):
-  // Total general − QR − Gastos = efectivo de venta; más la caja chica con que se abrió.
-  const efectivoDeVenta = resumen.totalGeneral - resumen.totalQr - totalGastos;
-  const efectivoAEntregar = efectivoDeVenta + cajaChica;
 
   const historialFiltrado = useMemo(
     () => (filtroDia === "todos" ? cierres : cierres.filter((c) => c.dia === filtroDia)),
     [cierres, filtroDia]
   );
 
-  async function guardarRegistro() {
-    setGuardando(true);
+  async function cerrarElTurno() {
+    if (!aperturaActiva || cerrando) return;
+    if (!window.confirm("¿Cerrar el turno? Se generará el reporte de la cajera y la caja quedará cerrada.")) return;
+    setCerrando(true);
     setMensaje("");
     try {
-      const etiquetaDia =
-        diaSeleccionado === "otro"
-          ? diaPersonalizado.trim() || "Otro"
-          : ETIQUETAS_DIA[diaSeleccionado];
-
-      await registrarCierre({
-        fecha: new Date().toISOString(),
-        dia: diaSeleccionado,
-        diaEtiqueta: etiquetaDia,
-        totalQr: resumen.totalQr,
-        totalEfectivo: resumen.totalEfectivo,
-        totalGeneral: resumen.totalGeneral,
-        cantidadVentas: ventasHoy.length,
-        productosVendidos: resumen.productos,
-        aperturaId: aperturaActiva?.id || null,
-        cajera: aperturaActiva?.cajera || "",
-        barra: aperturaActiva?.barra || "",
-        meseros: aperturaActiva?.meseros || [],
-        cajaChica,
-        totalGastos,
-        efectivoDeVenta,
-        efectivoAEntregar,
+      const cierre = await cerrarTurno({
+        apertura: aperturaActiva, ventas, gastosCaja, aperturasCaja, registrarCierre, cerrarAperturaCaja,
       });
-      if (aperturaActiva) {
-        await cerrarAperturaCaja(aperturaActiva.id, {
-          totalQr: resumen.totalQr, totalEfectivo: resumen.totalEfectivo, totalGastos,
-          efectivoDeVenta, efectivoAEntregar, cajaChica,
-        });
-      }
-      setMensaje("Cierre guardado correctamente. La caja quedó cerrada.");
+      setReporteVisto(cierre);
     } catch (err) {
       console.error(err);
-      setMensaje("No se pudo guardar el registro. Intenta de nuevo.");
+      setMensaje("No se pudo cerrar el turno. Intenta de nuevo.");
     } finally {
-      setGuardando(false);
+      setCerrando(false);
     }
   }
 
@@ -155,6 +71,7 @@ export default function CierreCaja() {
     if (!window.confirm("¿Eliminar este registro guardado? Esta acción no se puede deshacer.")) return;
     try {
       await eliminarCierre(id);
+      setReporteVisto((r) => (r?.id === id ? null : r));
     } catch (err) {
       console.error(err);
       setMensaje("No se pudo eliminar el registro.");
@@ -162,11 +79,7 @@ export default function CierreCaja() {
   }
 
   async function limpiarAntiguos() {
-    if (
-      !window.confirm(
-        "Esto eliminará todos los registros guardados con más de 1 mes de antigüedad. ¿Continuar?"
-      )
-    )
+    if (!window.confirm("Esto eliminará todos los registros guardados con más de 1 mes de antigüedad. ¿Continuar?"))
       return;
     try {
       const eliminados = await limpiarCierresAntiguos(30);
@@ -181,136 +94,41 @@ export default function CierreCaja() {
     }
   }
 
-  function exportarPDF() {
-    descargarPDF(
-      `Cierre de caja — ${new Date().toLocaleDateString("es-BO")}`,
-      [
-        { titulo: "Producto", clave: "producto" },
-        { titulo: "Cantidad", clave: "cantidad" },
-        { titulo: "Total Bs", clave: "total" },
-      ],
-      resumen.productos.map((p) => ({ ...p, total: p.total.toFixed(2) })),
-      `cierre-caja-${new Date().toISOString().slice(0, 10)}`
-    );
-  }
-
   return (
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Cierre de caja</h1>
-        <p>Resumen de todo lo vendido hoy. Se guarda con su día y fecha; el día no se cierra ni se bloquea.</p>
+        <p>Al cerrar el turno se genera solo el reporte de las ventas de la cajera.</p>
       </header>
 
-      <div className="tarjetas-resumen">
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Ventas hoy</span>
-          <span className="tarjeta-metrica__valor">{ventasHoy.length}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Efectivo</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.totalEfectivo.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">QR (se resta, no se entrega en mano)</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.totalQr.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica tarjeta-metrica--destacada">
-          <span className="tarjeta-metrica__etiqueta">Total general</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.totalGeneral.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Gastos (se restan del efectivo)</span>
-          <span className="tarjeta-metrica__valor">Bs {totalGastos.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Efectivo de venta (Total − QR − Gastos)</span>
-          <span className="tarjeta-metrica__valor">Bs {efectivoDeVenta.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Caja chica</span>
-          <span className="tarjeta-metrica__valor">Bs {cajaChica.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica tarjeta-metrica--destacada">
-          <span className="tarjeta-metrica__etiqueta">Efectivo a entregar en mano (efectivo de venta + caja chica)</span>
-          <span className="tarjeta-metrica__valor">Bs {efectivoAEntregar.toFixed(2)}</span>
-        </div>
-      </div>
+      {reporteVisto && (
+        <ReporteCierre
+          cierre={reporteVisto}
+          titulo={reporteVisto.id ? "Reporte guardado" : "Turno cerrado — reporte de la cajera"}
+          onCerrar={() => setReporteVisto(null)}
+        />
+      )}
 
-      <section className="lista-reciente">
-        <h2>Datos de apertura</h2>
-        {aperturaActiva ? (
-          <p><strong>Abrió:</strong> {aperturaActiva.cajera} · <strong>Barra:</strong> {aperturaActiva.barra} · <strong>Meseros:</strong> {(aperturaActiva.meseros || []).join(", ")} · <strong>Caja chica:</strong> Bs {cajaChica.toFixed(2)}</p>
-        ) : (
-          <p className="texto-vacio">No hay una caja abierta hoy.</p>
-        )}
-      </section>
-
-      <section className="lista-reciente">
-        <h2>Productos vendidos hoy</h2>
-        {resumen.productos.length === 0 ? (
-          <p className="texto-vacio">Todavía no hay ventas hoy para registrar.</p>
-        ) : (
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad vendida</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumen.productos.map((p) => (
-                <tr key={p.producto}>
-                  <td>{p.producto}</td>
-                  <td>{p.cantidad}</td>
-                  <td>Bs {p.total.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      <div className="formulario__fila">
-        <label>
-          Día del evento
-          <select value={diaSeleccionado} onChange={(e) => setDiaSeleccionado(e.target.value)}>
-            <option value="jueves">Jueves</option>
-            <option value="viernes">Viernes</option>
-            <option value="sabado">Sábado</option>
-            <option value="otro">Otro…</option>
-          </select>
-        </label>
-        {diaSeleccionado === "otro" && (
-          <label>
-            Nombre del día
-            <input
-              value={diaPersonalizado}
-              onChange={(e) => setDiaPersonalizado(e.target.value)}
-              placeholder="Ej: Domingo especial"
-            />
-          </label>
-        )}
-      </div>
-
-      <div className="formulario__acciones">
-        <button
-          className="boton boton--primario"
-          onClick={guardarRegistro}
-          disabled={guardando || ventasHoyTodas.length === 0 || !aperturaActiva}
-        >
-          {guardando ? "Guardando…" : "Guardar registro del día"}
-        </button>
-        <button className="boton boton--fantasma" onClick={exportarPDF} disabled={resumen.productos.length === 0}>
-          Descargar PDF
-        </button>
-      </div>
-      {mensaje && <div className="formulario__error formulario__error--exito">{mensaje}</div>}
+      {aperturaActiva ? (
+        <>
+          <ReporteCierre cierre={vistaPrevia} titulo="Turno abierto (así va hasta ahora)" />
+          <div className="formulario__acciones">
+            <button className="boton boton--peligro" onClick={cerrarElTurno} disabled={cerrando}>
+              {cerrando ? "Cerrando turno…" : "Cerrar turno y generar reporte"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <section className="lista-reciente">
+          <p className="texto-vacio">No hay una caja abierta. La apertura se hace desde Ventas.</p>
+        </section>
+      )}
+      {mensaje && <div className="formulario__error">{mensaje}</div>}
 
       <section className="lista-reciente">
         <header className="pagina__cabecera">
-          <h2>Historial de registros guardados</h2>
-          <p>Se guardan al menos 1 mes. Filtra por día para ver solo jueves, viernes o sábado.</p>
+          <h2>Historial de turnos cerrados</h2>
+          <p>Se guardan al menos 1 mes. Usa «Ver reporte» para abrir el detalle o descargarlo en PDF.</p>
         </header>
 
         <div className="formulario__fila">
@@ -327,21 +145,20 @@ export default function CierreCaja() {
         </div>
 
         {historialFiltrado.length === 0 ? (
-          <p className="texto-vacio">No hay registros guardados para este filtro.</p>
+          <p className="texto-vacio">No hay turnos cerrados para este filtro.</p>
         ) : (
           <table className="tabla">
             <thead>
               <tr>
                 <th>Fecha</th>
                 <th>Día</th>
-                <th>Ventas</th>
+                <th>Cajera</th>
                 <th>Efectivo</th>
                 <th>QR</th>
                 <th>Total</th>
                 <th>Gastos</th>
-                <th>Efectivo venta</th>
-                <th>Caja chica</th>
                 <th>Efectivo a entregar</th>
+                <th></th>
                 <th></th>
               </tr>
             </thead>
@@ -350,14 +167,17 @@ export default function CierreCaja() {
                 <tr key={c.id}>
                   <td>{formatoFechaLarga(c.fecha)}</td>
                   <td className="tabla__etiqueta">{c.diaEtiqueta || ETIQUETAS_DIA[c.dia] || "—"}</td>
-                  <td>{c.cantidadVentas ?? "—"}</td>
-                  <td>Bs {Number(c.totalEfectivo || 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.totalQr || 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.totalGeneral || 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.totalGastos || 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.efectivoDeVenta ?? c.totalEfectivo ?? 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.cajaChica || 0).toFixed(2)}</td>
-                  <td>Bs {Number(c.efectivoAEntregar ?? c.totalEfectivo ?? 0).toFixed(2)}</td>
+                  <td>{c.cajera || "—"}</td>
+                  <td>{bs(c.totalEfectivo)}</td>
+                  <td>{bs(c.totalQr)}</td>
+                  <td>{bs(c.totalGeneral)}</td>
+                  <td>{bs(c.totalGastos)}</td>
+                  <td>{bs(c.efectivoAEntregar ?? c.totalEfectivo)}</td>
+                  <td>
+                    <button className="boton boton--enlace" onClick={() => setReporteVisto(c)}>
+                      Ver reporte
+                    </button>
+                  </td>
                   <td>
                     <button className="boton boton--fantasma" onClick={() => borrarRegistro(c.id)}>
                       Eliminar

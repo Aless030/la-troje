@@ -586,3 +586,39 @@
     z-index: 30;
   }
 }
+/* --- Reporte de cierre de caja --- */
+.reporte-cierre__sub {
+  color: var(--texto-suave);
+  margin: 0 0 14px;
+}
+.reporte-cierre__cuadro {
+  max-width: 520px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--crema-panel);
+  padding: 10px 18px;
+  margin-bottom: 18px;
+}
+.reporte-cierre__fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--borde);
+  font-size: 1.02rem;
+}
+.reporte-cierre__fila--fuerte {
+  font-weight: 700;
+}
+.reporte-cierre__fila--total {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--verde);
+  border-bottom: none;
+  padding-top: 12px;
+}
+.reporte-cierre__nota {
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+  margin: 4px 0 6px;
+}
