@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
-import { buscarAperturaActiva, cerrarTurno } from "../utils/turno";
-import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/dosisCasa";
+import { buscarAperturaActiva, cerrarTurno } from "../utils/Turno";
+import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/Dosiscasa";
 
 function fechaHoyISO() {
   return new Date().toISOString();
@@ -537,7 +537,7 @@ export default function Ventas() {
               {tragosLista.length > 0 && (
                 <optgroup label="Tragos (Recetario)">
                   {tragosLista.map(({ receta, disponibles }) => (
-                    <option key={receta.id} value={`receta:${receta.id}`} >
+                    <option key={receta.id} value={`receta:${receta.id}`} disabled={disponibles <= 0}>
                       {receta.nombre} {disponibles <= 0 ? "(sin insumos aquí)" : `— alcanza para: ${disponibles}`}
                     </option>
                   ))}
@@ -550,7 +550,7 @@ export default function Ventas() {
             <select
               value={unidadSel}
               onChange={(e) => cambiarUnidad(e.target.value)}
-              disabled={!itemSel}
+              disabled={!productoSel}
             >
               <option value="Botella">Botella</option>
               <option value="Vaso">Vaso</option>
@@ -594,7 +594,7 @@ export default function Ventas() {
               min="1"
               value={form.cantidad}
               onChange={(e) => actualizar("cantidad", e.target.value)}
-              required={!!itemSel}
+              
             />
           </label>
         </div>
