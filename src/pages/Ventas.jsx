@@ -519,7 +519,7 @@ export default function Ventas() {
                 setForm((f) => ({
                   ...f,
                   productoId: e.target.value,
-                  unidad: elegido?.unidadVenta === "Vaso" || e.target.value.startsWith("receta:") ? "Vaso" : "Botella",
+                  unidad: elegido?.unidadVenta === "Vaso" ? "Vaso" : "Botella",
                 }));
                 setEditandoPrecio(false);
                 setPrecioEditado("");
@@ -537,7 +537,7 @@ export default function Ventas() {
               {tragosLista.length > 0 && (
                 <optgroup label="Tragos (Recetario)">
                   {tragosLista.map(({ receta, disponibles }) => (
-                    <option key={receta.id} value={`receta:${receta.id}`} disabled={disponibles <= 0}>
+                    <option key={receta.id} value={`receta:${receta.id}`} >
                       {receta.nombre} {disponibles <= 0 ? "(sin insumos aquí)" : `— alcanza para: ${disponibles}`}
                     </option>
                   ))}
@@ -548,9 +548,9 @@ export default function Ventas() {
           <label>
             Unidad
             <select
-              value={itemSel ? unidadSel : form.unidad}
+              value={unidadSel}
               onChange={(e) => cambiarUnidad(e.target.value)}
-              disabled={!productoSel}
+              disabled={!itemSel}
             >
               <option value="Botella">Botella</option>
               <option value="Vaso">Vaso</option>
@@ -594,7 +594,7 @@ export default function Ventas() {
               min="1"
               value={form.cantidad}
               onChange={(e) => actualizar("cantidad", e.target.value)}
-              
+              required={!!itemSel}
             />
           </label>
         </div>
