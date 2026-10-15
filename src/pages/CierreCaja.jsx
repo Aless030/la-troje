@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
-import { buscarAperturaActiva, cerrarTurno, construirCierre } from "../utils/turno";
+import { buscarAperturaActiva, cerrarTurno, construirCierre } from "../utils/Turno";
 
 const ETIQUETAS_DIA = {
   jueves: "Jueves",

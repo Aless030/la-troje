@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db, ensureAuth } from "../firebase";
-import { buscarAperturaActiva } from "../utils/turno";
+import { buscarAperturaActiva } from "../utils/Turno";
 
 const DataContext = createContext(null);
 

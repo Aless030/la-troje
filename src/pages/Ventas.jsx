@@ -114,6 +114,14 @@ export default function Ventas() {
     [recetas, productos, campoActivo]
   );
 
+  // Qué ingrediente de un trago falta en la barra activa (para explicarlo en la lista).
+  function faltanteDeTrago(receta) {
+    const consumo = consumoReceta(receta, productos);
+    if (consumo.length === 0) return "ingredientes sin dosis/volumen válido en Recetario";
+    const falta = consumo.find((c) => Number(productos.find((x) => x.id === c.productoId)?.[campoActivo] || 0) + 1e-9 < c.cantidad);
+    return falta ? `falta ${productos.find((x) => x.id === falta.productoId)?.nombre || "insumo"} en esta barra` : "";
+  }
+
   // Qué productos del inventario gasta una línea de la comanda (un trago gasta
   // cada ingrediente de su receta, en fracciones de botella).
   function consumoDeLinea(linea) {
@@ -538,7 +546,7 @@ export default function Ventas() {
                 <optgroup label="Tragos (Recetario)">
                   {tragosLista.map(({ receta, disponibles }) => (
                     <option key={receta.id} value={`receta:${receta.id}`} disabled={disponibles <= 0}>
-                      {receta.nombre} {disponibles <= 0 ? "(sin insumos aquí)" : `— alcanza para: ${disponibles}`}
+                      {receta.nombre} {disponibles <= 0 ? `(${faltanteDeTrago(receta) || "sin insumos aquí"})` : `— alcanza para: ${disponibles}`}
                     </option>
                   ))}
                 </optgroup>
