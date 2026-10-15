@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
-import { DOSIS_CASA, consumoIngrediente, volumenEnMl } from "../utils/dosis";
+import { DOSIS_CASA, consumoIngrediente, volumenEnMl } from "../utils/dosisCasa";
 
 const UNIDADES = [
   { valor: "ml", etiqueta: "ml" },

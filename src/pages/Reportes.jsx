@@ -51,7 +51,9 @@ export default function Reportes() {
   const porProducto = useMemo(() => {
     const mapa = {};
     ventasPagadas.forEach((v) => {
-      if (!mapa[v.producto]) {
+      // Vaso y botella del mismo producto van en filas separadas.
+      const clave = v.unidad === "Vaso" && !v.recetaId ? `${v.producto} (vaso)` : v.producto;
+      if (!mapa[clave]) {
         const productoInventario = productos.find(
           (p) =>
             p.id === v.productoId ||
@@ -59,8 +61,8 @@ export default function Reportes() {
               (v.producto || "").trim().toLowerCase()
         );
 
-        mapa[v.producto] = {
-          producto: v.producto,
+        mapa[clave] = {
+          producto: clave,
           cantidad: 0,
           existencia: v.recetaId
             ? "—"
@@ -73,8 +75,8 @@ export default function Reportes() {
         };
       }
 
-      mapa[v.producto].cantidad += v.cantidad;
-      mapa[v.producto].total += v.total;
+      mapa[clave].cantidad += v.cantidad;
+      mapa[clave].total += v.total;
     });
 
     return Object.values(mapa).sort((a, b) => b.cantidad - a.cantidad);

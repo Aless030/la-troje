@@ -22,6 +22,7 @@ const VACIO = {
   precio: "",
   precioCaja: "",
   precioVenta: "",
+  precioVaso: "",
   unidadVenta: "Botella",
   stockMinimo: "3",
   destino: "general",
@@ -59,6 +60,7 @@ export default function Inventario() {
           precio: String(existente.precio ?? ""),
           precioCaja: String(existente.precioCaja ?? ""),
           precioVenta: String(existente.precioVenta ?? existente.precio ?? ""),
+          precioVaso: String(existente.precioVaso ?? ""),
           unidadVenta: existente.unidadVenta || "Botella",
           stockMinimo: String(existente.stockMinimo ?? "3"),
           cantidadBotellas: "",
@@ -142,6 +144,7 @@ export default function Inventario() {
       precioCaja: esBebida && esCaja ? Number(form.precioCaja) || 0 : 0,
       precio: Number(precioUnitarioCalculado.toFixed(2)),
       precioVenta: Number(Number(form.precioVenta).toFixed(2)),
+      precioVaso: Number(Number(form.precioVaso || 0).toFixed(2)),
       unidadVenta: form.unidadVenta.trim() || "Botella",
       stockMinimo: Number(form.stockMinimo) || 0,
     };
@@ -228,6 +231,7 @@ export default function Inventario() {
       precio: String(p.precio ?? ""),
       precioCaja: "",
       precioVenta: String(p.precioVenta ?? p.precio ?? ""),
+      precioVaso: String(p.precioVaso ?? ""),
       unidadVenta: p.unidadVenta || "Botella",
       stockMinimo: String(p.stockMinimo ?? "3"),
       destino: "general",
@@ -426,6 +430,19 @@ export default function Inventario() {
               }}
               placeholder="Ej: 35.00"
               required
+            />
+          </label>
+          <label>
+            Precio por vaso (Bs, opcional)
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.precioVaso}
+              onChange={(e) => {
+                const valor = e.target.value.replace(",", ".");
+                if (/^\d*(\.\d{0,2})?$/.test(valor)) actualizar("precioVaso", valor);
+              }}
+              placeholder="Ej: 15.00 (si lo vendes por vaso)"
             />
           </label>
         </div>

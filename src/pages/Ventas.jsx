@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
-import ReporteCierre from "../components/ReporteCierre";
-import { buscarAperturaActiva, cerrarTurno } from "../utils/cierre";
-import { consumoReceta, formatearStock, redondear4, tragosDisponibles } from "../utils/dosis";
+import ReporteCierre from "../components/ReporteTurno";
+import { buscarAperturaActiva, cerrarTurno } from "../utils/turno";
+import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/dosisCasa";
 
 function fechaHoyISO() {
   return new Date().toISOString();
@@ -34,6 +34,7 @@ const VACIO = {
   barra: "interior",
   mesero: "",
   productoId: "",
+  unidad: "Botella",
   cantidad: 1,
   formaPago: "efectivo",
   montoQr: "",
@@ -70,13 +71,17 @@ export default function Ventas() {
   // Los tragos de Recetario también se venden: se eligen como "receta:<id>".
   const tragoSel = recetas.find((r) => `receta:${r.id}` === form.productoId);
   const itemSel = productoSel || tragoSel || null;
+  // Unidad de venta: un trago siempre es Vaso; un producto se elige (Botella o Vaso).
+  const unidadSel = tragoSel ? "Vaso" : form.unidad === "Vaso" ? "Vaso" : "Botella";
   const stockDisponible = productoSel
     ? Number(productoSel[campoActivo] || 0)
     : tragoSel
     ? tragosDisponibles(tragoSel, productos, campoActivo)
     : 0;
   const precioSugerido = productoSel
-    ? (productoSel.precioVenta ?? productoSel.precio ?? 0)
+    ? unidadSel === "Vaso"
+      ? Number(productoSel.precioVaso || 0)
+      : (productoSel.precioVenta ?? productoSel.precio ?? 0)
     : tragoSel
     ? Number(tragoSel.precioVenta || 0)
     : 0;
@@ -118,6 +123,12 @@ export default function Ventas() {
         productoId: c.productoId,
         cantidad: c.cantidad * Number(linea.cantidad || 0),
       }));
+    }
+    if (linea.unidad === "Vaso") {
+      // Un producto vendido por vaso gasta una dosis de la casa (fracción de botella).
+      const p = productos.find((x) => x.id === linea.productoId);
+      const dosis = dosisPorBotella(p);
+      return dosis > 0 ? [{ productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) / dosis }] : [];
     }
     return [{ productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) }];
   }
@@ -187,6 +198,12 @@ export default function Ventas() {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
+  function cambiarUnidad(unidad) {
+    setForm((f) => ({ ...f, unidad }));
+    setEditandoPrecio(false);
+    setPrecioEditado("");
+  }
+
   function cambiarBarra(barra) {
     setForm((f) => ({ ...f, barra, productoId: "" }));
   }
@@ -241,6 +258,12 @@ export default function Ventas() {
     if (!itemSel) return setError("Selecciona un producto o trago para agregar.");
     const cantidad = Number(form.cantidad) || 0;
     if (cantidad <= 0) return setError("La cantidad debe ser mayor a 0.");
+    if (productoSel && unidadSel === "Vaso" && dosisPorBotella(productoSel) <= 0) {
+      return setError(`"${productoSel.nombre}" no tiene dosis de la casa para su tamaño de botella, no se puede vender por vaso.`);
+    }
+    if (productoSel && unidadSel === "Vaso" && !esCortesia && precioUnitario <= 0) {
+      return setError(`"${productoSel.nombre}" no tiene precio por vaso. Ponlo en Inventario o usa «Cambiar».`);
+    }
     if (tragoSel && consumoReceta(tragoSel, productos).length === 0) {
       return setError(`El trago "${tragoSel.nombre}" no tiene ingredientes válidos. Revísalo en Recetario.`);
     }
@@ -251,7 +274,7 @@ export default function Ventas() {
       productoId: productoSel ? productoSel.id : `receta:${tragoSel.id}`,
       recetaId: tragoSel ? tragoSel.id : null,
       producto: itemSel.nombre,
-      unidad: tragoSel ? "Trago" : productoSel.unidadVenta || "Botella",
+      unidad: unidadSel,
       cantidad,
       precioUnitario,
       total: totalProducto,
@@ -357,7 +380,7 @@ export default function Ventas() {
           montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
           complemento: item.complemento, aperturaId: aperturaActiva.id,
           recetaId: item.recetaId || null,
-          consumo: item.recetaId
+          consumo: item.recetaId || item.unidad === "Vaso"
             ? consumoDeLinea(item).map((c) => ({ productoId: c.productoId, cantidad: redondear4(c.cantidad) }))
             : [],
         });
@@ -492,7 +515,12 @@ export default function Ventas() {
             <select
               value={form.productoId}
               onChange={(e) => {
-                actualizar("productoId", e.target.value);
+                const elegido = productos.find((p) => p.id === e.target.value);
+                setForm((f) => ({
+                  ...f,
+                  productoId: e.target.value,
+                  unidad: elegido?.unidadVenta === "Vaso" ? "Vaso" : "Botella",
+                }));
                 setEditandoPrecio(false);
                 setPrecioEditado("");
               }}
@@ -519,7 +547,14 @@ export default function Ventas() {
           </label>
           <label>
             Unidad
-            <input type="text" value={tragoSel ? "Trago" : productoSel?.unidadVenta || "—"} disabled />
+            <select
+              value={itemSel ? unidadSel : "Botella"}
+              onChange={(e) => cambiarUnidad(e.target.value)}
+              disabled={!productoSel}
+            >
+              <option value="Botella">Botella</option>
+              <option value="Vaso">Vaso</option>
+            </select>
           </label>
           <label>
             Precio de venta
