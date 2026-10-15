@@ -109,7 +109,6 @@ export default function Ventas() {
   const tragosLista = useMemo(
     () =>
       recetas
-        .filter((r) => r.nombre?.trim())
         .map((r) => ({ receta: r, disponibles: tragosDisponibles(r, productos, campoActivo) }))
         .sort((a, b) => (a.receta.nombre || "").localeCompare(b.receta.nombre || "", "es")),
     [recetas, productos, campoActivo]
@@ -325,6 +324,11 @@ export default function Ventas() {
     if (!form.mesero.trim()) return setError("Selecciona el mesero.");
     if (!form.comanda.trim()) return setError("Ingresa el N° de comanda.");
 
+    // Aviso para evitar que un producto seleccionado se ignore sin querer
+    if (itemSel) {
+      return setError("Tienes un producto seleccionado sin agregar. Pulsa «Agregar producto» o quítalo antes de registrar.");
+    }
+
     // Solo se registra lo que está en la lista de la comanda
     const productosARegistrar = [...productosComanda];
 
@@ -515,7 +519,7 @@ export default function Ventas() {
                 setForm((f) => ({
                   ...f,
                   productoId: e.target.value,
-                  unidad: elegido?.unidadVenta === "Vaso" ? "Vaso" : "Botella",
+                  unidad: elegido?.unidadVenta === "Vaso" || e.target.value.startsWith("receta:") ? "Vaso" : "Botella",
                 }));
                 setEditandoPrecio(false);
                 setPrecioEditado("");
@@ -544,7 +548,7 @@ export default function Ventas() {
           <label>
             Unidad
             <select
-              value={itemSel ? unidadSel : "Botella"}
+              value={itemSel ? unidadSel : form.unidad}
               onChange={(e) => cambiarUnidad(e.target.value)}
               disabled={!productoSel}
             >
