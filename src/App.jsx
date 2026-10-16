@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DataProvider, useData } from "./context/DataContext";
 import Sidebar from "./components/Sidebar";
+import Logo from "./components/Logo";
 import MenuPrincipal from "./pages/MenuPrincipal";
 import Ventas from "./pages/Ventas";
 import Inventario from "./pages/Inventario";
@@ -67,6 +68,7 @@ export default function App() {
             <button className="app__boton-menu" onClick={() => setSidebarAbierto(true)}>
               ☰
             </button>
+            <Logo clase="logo--barra" />
             <span>LA TROJE</span>
           </div>
           <main className="app__contenido">

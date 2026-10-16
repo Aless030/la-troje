@@ -1,17 +1,17 @@
 :root {
-  --marron-oscuro: #3a2a1e;
-  --marron-medio: #6b4a35;
-  --dorado: #c9973e;
-  --dorado-suave: #e8d3a3;
-  --crema: #f6efe0;
-  --crema-panel: #fffdf8;
-  --verde: #4c6444;
-  --rojo: #b4432d;
-  --texto: #2b2118;
-  --texto-suave: #6f6152;
-  --borde: #e6ddc9;
-  --sombra: 0 8px 24px rgba(58, 42, 30, 0.08);
-  --radio: 14px;
+  --marron-oscuro: #0d0d0d;   /* negro principal */
+  --marron-medio: #3a3a3a;
+  --dorado: #0d0d0d;          /* acento = negro */
+  --dorado-suave: #d9d9d9;
+  --crema: #f2f2f2;           /* fondo gris muy claro */
+  --crema-panel: #ffffff;
+  --verde: #1f1f1f;
+  --rojo: #0d0d0d;
+  --texto: #111111;
+  --texto-suave: #666666;
+  --borde: #dcdcdc;
+  --sombra: 0 4px 14px rgba(0, 0, 0, 0.06);
+  --radio: 10px;
 }
 
 .app {
@@ -26,7 +26,7 @@
   width: 250px;
   flex-shrink: 0;
   background: var(--marron-oscuro);
-  color: #f4ead6;
+  color: #ffffff;
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
@@ -40,12 +40,12 @@
   align-items: center;
   gap: 10px;
   padding: 0 8px 24px;
-  border-bottom: 1px solid rgba(244, 234, 214, 0.15);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   margin-bottom: 16px;
 }
 
 .sidebar__grano {
-  color: var(--dorado);
+  color: #ffffff;
   font-size: 22px;
 }
 
@@ -58,7 +58,7 @@
 
 .sidebar__sub {
   font-size: 12px;
-  color: #c8b89c;
+  color: #b5b5b5;
 }
 
 .sidebar__nav {
@@ -73,7 +73,7 @@
   gap: 10px;
   background: transparent;
   border: none;
-  color: #ecdfc7;
+  color: #e6e6e6;
   text-align: left;
   padding: 11px 12px;
   border-radius: 10px;
@@ -82,12 +82,12 @@
 }
 
 .sidebar__item:hover {
-  background: rgba(244, 234, 214, 0.08);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .sidebar__item--activo {
-  background: var(--dorado);
-  color: var(--marron-oscuro);
+  background: #ffffff;
+  color: #0d0d0d;
   font-weight: 600;
 }
 
@@ -206,7 +206,7 @@
 
 .tarjeta-acceso:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(58, 42, 30, 0.14);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
 }
 
 .tarjeta-acceso__titulo {
@@ -276,7 +276,7 @@
 .formulario textarea:focus {
   outline: none;
   border-color: var(--dorado);
-  box-shadow: 0 0 0 3px rgba(201, 151, 62, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12);
 }
 
 .formulario__total {
@@ -293,7 +293,7 @@
 }
 
 .formulario__error {
-  background: #fbeae6;
+  background: #ececec;
   color: var(--rojo);
   padding: 10px 14px;
   border-radius: 9px;
@@ -301,7 +301,7 @@
 }
 
 .formulario__error--exito {
-  background: #eaf1e6;
+  background: #ececec;
   color: var(--verde);
 }
 
@@ -321,8 +321,8 @@
 }
 
 .boton--primario {
-  background: var(--dorado);
-  color: var(--marron-oscuro);
+  background: #0d0d0d;
+  color: #ffffff;
 }
 
 .boton--primario:hover:not(:disabled) {
@@ -392,7 +392,7 @@
 }
 
 .tabla__fila--alerta td {
-  background: #fbeae6;
+  background: #ececec;
 }
 
 .texto-vacio {
@@ -401,7 +401,7 @@
 }
 
 .aviso {
-  background: #fbeae6;
+  background: #ececec;
   color: var(--rojo);
   border-radius: 10px;
   padding: 12px 16px;
@@ -439,7 +439,7 @@
 .celda-editable:focus {
   outline: none;
   border-color: var(--dorado);
-  box-shadow: 0 0 0 2px rgba(201, 151, 62, 0.2);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
 }
 
 .celda-editable--stock {
@@ -548,7 +548,7 @@
     gap: 12px;
     padding: 14px 16px;
     background: var(--marron-oscuro);
-    color: #f4ead6;
+    color: #ffffff;
     position: sticky;
     top: 0;
     z-index: 20;
@@ -560,7 +560,7 @@
   .app__boton-menu {
     background: none;
     border: none;
-    color: #f4ead6;
+    color: #ffffff;
     font-size: 20px;
   }
 
@@ -621,4 +621,45 @@
   font-size: 0.8rem;
   color: var(--texto-suave);
   margin: 4px 0 6px;
+}
+
+/* --- Logo --- */
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.logo--sidebar {
+  width: 100%;
+  height: 84px;
+  margin-bottom: 6px;
+}
+
+.logo--barra {
+  width: 34px;
+  height: 34px;
+}
+
+/* Espacio reservado mientras no exista public/logo.png */
+.logo__vacio {
+  width: 100%;
+  height: 100%;
+  border: 1.5px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.6);
 }

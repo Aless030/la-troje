@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { useData } from "../context/DataContext";
 
-const COLORES = ["#C9973E", "#8B4B33", "#4C6444", "#3A2A1E", "#B4432D", "#6B7A52"];
+const COLORES = ["#0D0D0D", "#4D4D4D", "#8C8C8C", "#BDBDBD", "#2B2B2B", "#6E6E6E"];
 
 function dentroDeRango(fechaIso, desde, hasta) {
   const f = new Date(fechaIso).getTime();
@@ -138,7 +138,7 @@ export default function DashboardPage() {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={datos.top5}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6ddc9" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#dcdcdc" />
                 <XAxis dataKey="producto" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
@@ -167,7 +167,7 @@ export default function DashboardPage() {
                   label={(d) => `${d.name}: Bs ${d.value.toFixed(0)}`}
                 >
                   {distribucionPago.map((_, i) => (
-                    <Cell key={i} fill={i === 0 ? "#4C6444" : "#C9973E"} />
+                    <Cell key={i} fill={i === 0 ? "#0D0D0D" : "#8C8C8C"} />
                   ))}
                 </Pie>
                 <Tooltip />

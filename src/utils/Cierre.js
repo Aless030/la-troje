@@ -40,10 +40,8 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
   const totalEfectivo = r2(pagadas.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0));
   const totalQr = r2(pagadas.reduce((s, v) => s + Number(v.montoQr || 0), 0));
   const totalGastos = r2(gastos.reduce((s, g) => s + Number(g.monto || 0), 0));
-  const cajaChica = r2(apertura.cajaChica);
-  // Ventas totales = efectivo + QR. A mano se entrega: efectivo - gastos (+ caja chica con la que abrió).
   const efectivoDeVenta = r2(totalEfectivo - totalGastos);
-  const efectivoAEntregar = r2(efectivoDeVenta + cajaChica);
+  const efectivoAEntregar = efectivoDeVenta;
 
   const porProducto = {};
   pagadas.forEach((v) => {
@@ -60,7 +58,6 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
     cajera: apertura.cajera || "",
     barra: apertura.barra || "",
     meseros: apertura.meseros || [],
-    cajaChica,
     totalEfectivo,
     totalQr,
     totalGeneral: r2(totalEfectivo + totalQr),

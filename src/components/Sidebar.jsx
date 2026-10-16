@@ -1,3 +1,5 @@
+import Logo from "./Logo";
+
 const ITEMS = [
   { id: "menu", etiqueta: "Menú principal", icono: "⌂" },
   { id: "ventas", etiqueta: "Venta", icono: "✎" },
@@ -15,8 +17,8 @@ export default function Sidebar({ vista, setVista, abierto, setAbierto }) {
   return (
     <>
       <aside className={`sidebar ${abierto ? "sidebar--abierto" : ""}`}>
+        <Logo clase="logo--sidebar" />
         <div className="sidebar__marca">
-          <span className="sidebar__grano">◆</span>
           <div>
             <div className="sidebar__nombre">LA TROJE</div>
             <div className="sidebar__sub">Sistema de caja</div>

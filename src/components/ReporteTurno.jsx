@@ -8,6 +8,7 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
   const productos = cierre.productosVendidos || [];
   const gastos = cierre.gastosDetalle || [];
   const cortesias = cierre.cortesiasDetalle || [];
+  const efectivoAEntregar = Number(cierre.totalEfectivo || 0) - Number(cierre.totalGastos || 0);
 
   return (
     <section className="lista-reciente reporte-cierre">
@@ -47,19 +48,12 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
           <span>VENTAS TOTALES</span>
           <span>{bs(cierre.totalGeneral)}</span>
         </div>
-        {Number(cierre.cajaChica) > 0 && (
-          <div className="reporte-cierre__fila">
-            <span>CAJA CHICA (con la que abrió)</span>
-            <span>{bs(cierre.cajaChica)}</span>
-          </div>
-        )}
         <div className="reporte-cierre__fila reporte-cierre__fila--total">
           <span>EFECTIVO A ENTREGAR</span>
-          <span>{bs(cierre.efectivoAEntregar)}</span>
+          <span>{bs(efectivoAEntregar)}</span>
         </div>
         <p className="reporte-cierre__nota">
-          Efectivo a entregar = ventas en efectivo − gastos{Number(cierre.cajaChica) > 0 ? " + caja chica" : ""}. El QR no
-          se entrega en mano.
+          Efectivo a entregar = ventas totales − QR − gastos. El QR no se entrega en mano.
         </p>
       </div>
 
@@ -70,16 +64,20 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
             <thead>
               <tr>
                 <th>Producto</th>
-                <th>Cantidad</th>
+                <th>Cant.</th>
+                <th>P. unitario</th>
                 <th>Total</th>
+                <th>Pago</th>
               </tr>
             </thead>
             <tbody>
-              {productos.map((p) => (
-                <tr key={p.producto}>
+              {productos.map((p, i) => (
+                <tr key={`${p.producto}-${i}`}>
                   <td>{p.producto}</td>
                   <td>{Number(p.cantidad)}</td>
+                  <td>{p.precioUnitario != null ? bs(p.precioUnitario) : "—"}</td>
                   <td>{bs(p.total)}</td>
+                  <td>{p.pago || "—"}</td>
                 </tr>
               ))}
             </tbody>

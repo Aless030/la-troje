@@ -172,7 +172,7 @@ export default function CierreCaja() {
                   <td>{bs(c.totalQr)}</td>
                   <td>{bs(c.totalGeneral)}</td>
                   <td>{bs(c.totalGastos)}</td>
-                  <td>{bs(c.efectivoAEntregar ?? c.totalEfectivo)}</td>
+                  <td>{bs(Number(c.totalEfectivo || 0) - Number(c.totalGastos || 0))}</td>
                   <td>
                     <button className="boton boton--enlace" onClick={() => setReporteVisto(c)}>
                       Ver reporte

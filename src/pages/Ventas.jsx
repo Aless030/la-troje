@@ -53,7 +53,7 @@ export default function Ventas() {
   const [error, setError] = useState("");
   const [precioEditado, setPrecioEditado] = useState("");
   const [editandoPrecio, setEditandoPrecio] = useState(false);
-  const [aperturaForm, setAperturaForm] = useState({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
+  const [aperturaForm, setAperturaForm] = useState({ cajera: "", barra: "interior", meseros: "" });
   const [gastoForm, setGastoForm] = useState({ concepto: "", monto: "", observaciones: "" });
   const [mensajeApertura, setMensajeApertura] = useState("");
   const [mensajeGasto, setMensajeGasto] = useState("");
@@ -222,14 +222,12 @@ export default function Ventas() {
     setMensajeApertura("");
     const cajera = aperturaForm.cajera.trim();
     const meseros = aperturaForm.meseros.split(",").map((m) => m.trim()).filter(Boolean);
-    const cajaChica = Number(aperturaForm.cajaChica) || 0;
     if (!cajera) return setMensajeApertura("Escribe el nombre de la persona que abre la caja.");
-    if (cajaChica < 0) return setMensajeApertura("La caja chica no puede ser negativa.");
     if (meseros.length === 0) return setMensajeApertura("Escribe al menos un mesero.");
     setAbriendo(true);
     try {
       await registrarAperturaCaja({
-        fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
+        fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros,
       });
       setReporteCierre(null);
       setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: "", comanda: "" }));
@@ -316,7 +314,7 @@ export default function Ventas() {
       setMensajeApertura("");
       setMensajeGasto("");
       setGastoForm({ concepto: "", monto: "", observaciones: "" });
-      setAperturaForm({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
+      setAperturaForm({ cajera: "", barra: "interior", meseros: "" });
     } catch (err) {
       console.error(err);
       setError("No se pudo cerrar la caja. Intenta de nuevo.");
@@ -431,10 +429,6 @@ export default function Ventas() {
               <datalist id="cajeras-apertura-lista">{cajerasAperturaPrevias.map((c) => <option key={c} value={c} />)}</datalist>
             </label>
             <label>
-              Caja chica / Con cuánto abre (Bs)
-              <input type="number" step="0.01" min="0" value={aperturaForm.cajaChica} onChange={(e) => setAperturaForm((f) => ({ ...f, cajaChica: e.target.value }))} placeholder="Ej: 150" required />
-            </label>
-            <label>
               Barra
               <select value={aperturaForm.barra} onChange={(e) => setAperturaForm((f) => ({ ...f, barra: e.target.value }))}>
                 {BARRAS.map((b) => <option key={b.valor} value={b.valor}>{b.etiqueta}</option>)}
@@ -456,7 +450,7 @@ export default function Ventas() {
       ) : (
         <section className="lista-reciente">
           <h2>Caja abierta</h2>
-          <p><strong>{aperturaActiva.cajera}</strong> · Abrió: {new Date(aperturaActiva.fecha).toLocaleString("es-BO")} · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
+          <p><strong>{aperturaActiva.cajera}</strong> · Abrió: {new Date(aperturaActiva.fecha).toLocaleString("es-BO")} · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
           <button type="button" className="boton boton--peligro" onClick={cerrarCajaDelDia} disabled={cerrandoCaja}>
             {cerrandoCaja ? "Cerrando caja…" : "Cerrar caja y ver reporte"}
           </button>

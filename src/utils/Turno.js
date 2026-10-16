@@ -40,18 +40,27 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
   const totalEfectivo = r2(pagadas.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0));
   const totalQr = r2(pagadas.reduce((s, v) => s + Number(v.montoQr || 0), 0));
   const totalGastos = r2(gastos.reduce((s, g) => s + Number(g.monto || 0), 0));
-  const cajaChica = r2(apertura.cajaChica);
-  // Ventas totales = efectivo + QR. A mano se entrega: efectivo - gastos (+ caja chica con la que abrió).
+  // Ventas totales = efectivo + QR. A mano se entrega: ventas totales - QR - gastos (= efectivo - gastos).
   const efectivoDeVenta = r2(totalEfectivo - totalGastos);
-  const efectivoAEntregar = r2(efectivoDeVenta + cajaChica);
+  const efectivoAEntregar = efectivoDeVenta;
 
+  // Una fila por producto + precio unitario + forma de pago (QR / Efectivo / QR + Efectivo).
+  const metodoDe = (v) => {
+    const qr = Number(v.montoQr || 0) > 0;
+    const ef = Number(v.montoEfectivo || 0) > 0;
+    if (qr && ef) return "QR + Efectivo";
+    return qr ? "QR" : "Efectivo";
+  };
   const porProducto = {};
   pagadas.forEach((v) => {
     // Un producto vendido por vaso se separa del mismo producto vendido por botella.
     const nombre = v.unidad === "Vaso" && !v.recetaId ? `${v.producto} (vaso)` : v.producto;
-    if (!porProducto[nombre]) porProducto[nombre] = { producto: nombre, cantidad: 0, total: 0 };
-    porProducto[nombre].cantidad += Number(v.cantidad || 0);
-    porProducto[nombre].total = r2(porProducto[nombre].total + Number(v.total || 0));
+    const precioUnitario = r2(v.precioUnitario);
+    const pago = metodoDe(v);
+    const clave = `${nombre}|${precioUnitario}|${pago}`;
+    if (!porProducto[clave]) porProducto[clave] = { producto: nombre, precioUnitario, pago, cantidad: 0, total: 0 };
+    porProducto[clave].cantidad += Number(v.cantidad || 0);
+    porProducto[clave].total = r2(porProducto[clave].total + Number(v.total || 0));
   });
 
   return {
@@ -62,7 +71,6 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
     cajera: apertura.cajera || "",
     barra: apertura.barra || "",
     meseros: apertura.meseros || [],
-    cajaChica,
     totalEfectivo,
     totalQr,
     totalGeneral: r2(totalEfectivo + totalQr),
