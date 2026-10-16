@@ -663,3 +663,328 @@
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.6);
 }
+
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+.dash {
+  --d-borde: #E5E7EB;
+  --d-texto: #111827;
+  --d-suave: #6B7280;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.dash__cabecera {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.dash__cabecera h1 {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+  color: #0D0D0D;
+}
+
+.dash__cabecera p {
+  margin: 0;
+  color: var(--d-suave);
+  font-size: 14px;
+}
+
+.dash__filtros {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--d-borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.dash__filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-suave);
+}
+
+.dash__filtros input {
+  border: 1px solid var(--d-borde);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--d-texto);
+  background: #F9FAFB;
+}
+
+.dash__filtros input:focus {
+  outline: 2px solid #2563EB;
+  outline-offset: 1px;
+  background: #fff;
+}
+
+.dash__limpiar {
+  border: none;
+  background: #0D0D0D;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dash__limpiar:hover {
+  background: #2563EB;
+}
+
+/* --- KPIs --- */
+.dash__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.dash__kpis--dos {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+.dash-kpi {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid var(--d-borde);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(17, 24, 39, 0.05);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dash-kpi::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--acento);
+}
+
+.dash-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 26px rgba(17, 24, 39, 0.1);
+}
+
+.dash-kpi__icono {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 14%, white);
+}
+
+.dash-kpi__cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dash-kpi__etiqueta {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-suave);
+}
+
+.dash-kpi__valor {
+  white-space: nowrap;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--d-texto);
+  line-height: 1.15;
+}
+
+.dash-kpi__valor--texto {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Tarjeta principal oscura */
+.dash-kpi--oscura {
+  background: linear-gradient(135deg, #0D0D0D 0%, #1B2A4E 100%);
+  border-color: #0D0D0D;
+}
+
+.dash-kpi--oscura::before {
+  background: var(--acento);
+}
+
+.dash-kpi--oscura .dash-kpi__icono {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.dash-kpi--oscura .dash-kpi__etiqueta {
+  color: #AEB8D0;
+}
+
+.dash-kpi--oscura .dash-kpi__valor {
+  color: #fff;
+}
+
+/* --- Paneles de graficos --- */
+.dash__graficos {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .dash__graficos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dash-panel {
+  background: #fff;
+  border: 1px solid var(--d-borde);
+  border-radius: 14px;
+  padding: 18px 20px 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(17, 24, 39, 0.05);
+}
+
+.dash-panel__titulo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dash-panel__titulo h2 {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: #0D0D0D;
+}
+
+.dash-panel__titulo span {
+  font-size: 12px;
+  color: var(--d-suave);
+}
+
+.dash__vacio {
+  margin: 40px 0;
+  text-align: center;
+  color: var(--d-suave);
+  font-size: 14px;
+}
+
+/* --- Dona --- */
+.dash-dona {
+  position: relative;
+}
+
+.dash-dona__centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.dash-dona__centro span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-suave);
+}
+
+.dash-dona__centro strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--d-texto);
+}
+
+.dash-leyenda {
+  list-style: none;
+  margin: 8px 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-leyenda li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  background: #F9FAFB;
+  border-radius: 8px;
+}
+
+.dash-leyenda__punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dash-leyenda__nombre {
+  font-weight: 600;
+  color: var(--d-texto);
+}
+
+.dash-leyenda__monto {
+  margin-left: auto;
+  color: var(--d-suave);
+}
+
+.dash-leyenda__pct {
+  font-weight: 800;
+  color: var(--d-texto);
+  min-width: 38px;
+  text-align: right;
+}

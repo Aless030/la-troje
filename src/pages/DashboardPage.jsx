@@ -4,6 +4,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -13,13 +14,64 @@ import {
 } from "recharts";
 import { useData } from "../context/DataContext";
 
-const COLORES = ["#0D0D0D", "#4D4D4D", "#8C8C8C", "#BDBDBD", "#2B2B2B", "#6E6E6E"];
+// Paleta viva sobre base blanco y negro.
+const AZUL = "#2563EB";
+const VERDE = "#10B981";
+const AMBAR = "#F59E0B";
+const VIOLETA = "#7C3AED";
+const ROSA = "#F43F5E";
+const COLORES = [AZUL, VERDE, AMBAR, VIOLETA, ROSA];
+
+const estiloTooltip = {
+  background: "#0D0D0D",
+  border: "none",
+  borderRadius: 8,
+  color: "#fff",
+  fontSize: 13,
+  padding: "8px 12px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+};
 
 function dentroDeRango(fechaIso, desde, hasta) {
   const f = new Date(fechaIso).getTime();
   if (desde && f < new Date(desde + "T00:00:00").getTime()) return false;
   if (hasta && f > new Date(hasta + "T23:59:59").getTime()) return false;
   return true;
+}
+
+const bs = (n) => `Bs ${Number(n || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Iconos simples (SVG) para las tarjetas.
+const Icono = ({ tipo }) => {
+  const props = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+  switch (tipo) {
+    case "ingresos":
+      return (<svg {...props}><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>);
+    case "ventas":
+      return (<svg {...props}><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></svg>);
+    case "estrella":
+      return (<svg {...props}><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" /></svg>);
+    case "mesero":
+      return (<svg {...props}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>);
+    case "baja":
+      return (<svg {...props}><path d="M3 7l6 6 4-4 8 8" /><path d="M15 17h6v-6" /></svg>);
+    default:
+      return (<svg {...props}><path d="M21 8l-9-5-9 5v8l9 5 9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>);
+  }
+};
+
+function Tarjeta({ etiqueta, valor, tipo, color, texto, oscura }) {
+  return (
+    <div className={`dash-kpi ${oscura ? "dash-kpi--oscura" : ""}`} style={{ "--acento": color }}>
+      <div className="dash-kpi__icono"><Icono tipo={tipo} /></div>
+      <div className="dash-kpi__cuerpo">
+        <span className="dash-kpi__etiqueta">{etiqueta}</span>
+        <span className={`dash-kpi__valor ${texto ? "dash-kpi__valor--texto" : ""}`} title={texto ? String(valor) : undefined}>
+          {valor}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -69,125 +121,123 @@ export default function DashboardPage() {
   }, [ventas, productos]);
 
   const distribucionPago = [
-    { name: "Efectivo", value: datos.totalEfectivo },
-    { name: "QR", value: datos.totalQr },
+    { name: "Efectivo", value: datos.totalEfectivo, color: VERDE },
+    { name: "QR", value: datos.totalQr, color: AZUL },
   ];
+  const sumaPagos = datos.totalEfectivo + datos.totalQr;
+  const pct = (v) => (sumaPagos > 0 ? ((v / sumaPagos) * 100).toFixed(0) : 0);
 
   return (
-    <div className="pagina">
-      <header className="pagina__cabecera">
-        <h1>Dashboard</h1>
-        <p>
-          {desde || hasta
-            ? "Métricas del rango de fechas seleccionado."
-            : "Métricas de todo el histórico registrado. Filtra por fecha si quieres ver un período."}
-        </p>
+    <div className="pagina dash">
+      <header className="dash__cabecera">
+        <div>
+          <h1>Dashboard</h1>
+          <p>
+            {desde || hasta
+              ? "Métricas del rango de fechas seleccionado."
+              : "Métricas de todo el histórico registrado."}
+          </p>
+        </div>
+        <div className="dash__filtros">
+          <label>
+            Desde
+            <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+          </label>
+          {(desde || hasta) && (
+            <button
+              type="button"
+              className="dash__limpiar"
+              onClick={() => {
+                setDesde("");
+                setHasta("");
+              }}
+            >
+              Quitar filtro
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="formulario__fila">
-        <label>
-          Desde
-          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-        </label>
-        <label>
-          Hasta
-          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-        </label>
-        {(desde || hasta) && (
-          <button
-            type="button"
-            className="boton boton--fantasma"
-            onClick={() => {
-              setDesde("");
-              setHasta("");
-            }}
-          >
-            Quitar filtro
-          </button>
-        )}
+      <div className="dash__kpis">
+        <Tarjeta oscura tipo="ingresos" color={AZUL} etiqueta="Ingresos totales" valor={bs(datos.totalIngresos)} />
+        <Tarjeta tipo="ventas" color={VERDE} etiqueta="Ventas registradas" valor={datos.totalVentas} />
+        <Tarjeta tipo="estrella" color={AMBAR} etiqueta="Producto estrella" valor={datos.masVendido?.producto || "—"} texto />
+        <Tarjeta tipo="mesero" color={VIOLETA} etiqueta="Mesero del período" valor={datos.meseroTop ? datos.meseroTop[0] : "—"} texto />
       </div>
 
-      <div className="tarjetas-resumen">
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Ingresos totales</span>
-          <span className="tarjeta-metrica__valor">Bs {datos.totalIngresos.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Ventas registradas</span>
-          <span className="tarjeta-metrica__valor">{datos.totalVentas}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Producto estrella</span>
-          <span className="tarjeta-metrica__valor tarjeta-metrica__valor--texto">
-            {datos.masVendido?.producto || "—"}
-          </span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Mesero del período</span>
-          <span className="tarjeta-metrica__valor tarjeta-metrica__valor--texto">
-            {datos.meseroTop ? datos.meseroTop[0] : "—"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grilla-graficos">
-        <div className="panel-grafico">
-          <h2>Top 5 productos por cantidad vendida</h2>
+      <div className="dash__graficos">
+        <section className="dash-panel dash-panel--ancho">
+          <div className="dash-panel__titulo">
+            <h2>Top 5 productos</h2>
+            <span>Por cantidad vendida</span>
+          </div>
           {datos.top5.length === 0 ? (
-            <p className="texto-vacio">No hay ventas en este período.</p>
+            <p className="dash__vacio">No hay ventas en este período.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={datos.top5}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#dcdcdc" />
-                <XAxis dataKey="producto" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={datos.top5} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 12, fill: "#6B7280" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="producto" width={130} tick={{ fontSize: 12.5, fill: "#111827", fontWeight: 500 }} axisLine={false} tickLine={false} />
+                <Tooltip cursor={{ fill: "rgba(37,99,235,0.06)" }} contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} labelStyle={{ color: "#9CA3AF" }} formatter={(v) => [v, "Unidades"]} />
+                <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={26}>
                   {datos.top5.map((_, i) => (
                     <Cell key={i} fill={COLORES[i % COLORES.length]} />
                   ))}
+                  <LabelList dataKey="cantidad" position="right" style={{ fontSize: 12.5, fontWeight: 700, fill: "#111827" }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </section>
 
-        <div className="panel-grafico">
-          <h2>Efectivo vs QR</h2>
-          {datos.totalIngresos === 0 ? (
-            <p className="texto-vacio">No hay ventas en este período.</p>
+        <section className="dash-panel">
+          <div className="dash-panel__titulo">
+            <h2>Efectivo vs QR</h2>
+            <span>Forma de pago</span>
+          </div>
+          {sumaPagos === 0 ? (
+            <p className="dash__vacio">No hay ventas en este período.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={distribucionPago}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={95}
-                  label={(d) => `${d.name}: Bs ${d.value.toFixed(0)}`}
-                >
-                  {distribucionPago.map((_, i) => (
-                    <Cell key={i} fill={i === 0 ? "#0D0D0D" : "#8C8C8C"} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <div className="dash-dona">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={distribucionPago} dataKey="value" nameKey="name" innerRadius={68} outerRadius={96} paddingAngle={3} stroke="none">
+                      {distribucionPago.map((d) => (
+                        <Cell key={d.name} fill={d.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} formatter={(v) => bs(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="dash-dona__centro">
+                  <span>Total</span>
+                  <strong>{bs(sumaPagos)}</strong>
+                </div>
+              </div>
+              <ul className="dash-leyenda">
+                {distribucionPago.map((d) => (
+                  <li key={d.name}>
+                    <span className="dash-leyenda__punto" style={{ background: d.color }} />
+                    <span className="dash-leyenda__nombre">{d.name}</span>
+                    <span className="dash-leyenda__monto">{bs(d.value)}</span>
+                    <span className="dash-leyenda__pct">{pct(d.value)}%</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-        </div>
+        </section>
       </div>
 
-      <div className="tarjetas-resumen">
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Producto de menor rotación</span>
-          <span className="tarjeta-metrica__valor tarjeta-metrica__valor--texto">
-            {datos.menosVendido?.producto || "—"}
-          </span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Valor del inventario actual (no depende del filtro)</span>
-          <span className="tarjeta-metrica__valor">Bs {datos.valorInventario.toFixed(2)}</span>
-        </div>
+      <div className="dash__kpis dash__kpis--dos">
+        <Tarjeta tipo="baja" color={ROSA} etiqueta="Producto de menor rotación" valor={datos.menosVendido?.producto || "—"} texto />
+        <Tarjeta tipo="inventario" color={VERDE} etiqueta="Valor del inventario actual (no depende del filtro)" valor={bs(datos.valorInventario)} />
       </div>
     </div>
   );

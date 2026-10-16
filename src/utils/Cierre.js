@@ -40,6 +40,8 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
   const totalEfectivo = r2(pagadas.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0));
   const totalQr = r2(pagadas.reduce((s, v) => s + Number(v.montoQr || 0), 0));
   const totalGastos = r2(gastos.reduce((s, g) => s + Number(g.monto || 0), 0));
+  // Caja chica: solo informativa, no entra en ningun calculo.
+  const cajaChica = r2(apertura.cajaChica);
   const efectivoDeVenta = r2(totalEfectivo - totalGastos);
   const efectivoAEntregar = efectivoDeVenta;
 
@@ -62,6 +64,7 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
     totalQr,
     totalGeneral: r2(totalEfectivo + totalQr),
     totalGastos,
+    cajaChica,
     efectivoDeVenta,
     efectivoAEntregar,
     cantidadVentas: pagadas.length,

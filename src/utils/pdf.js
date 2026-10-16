@@ -166,6 +166,12 @@ export function descargarReporteCierrePDF(c) {
   doc.setFont("helvetica", "normal");
   doc.text("Efectivo a entregar = ventas totales - QR - gastos.", margen, y - 4);
   y += 10;
+  if (Number(c.cajaChica) > 0) {
+    doc.setFontSize(10);
+    doc.text(`Caja chica con la que abrio: ${fmtBs(c.cajaChica)} (informativa, no se suma ni se resta)`, margen, y);
+    doc.setFontSize(9);
+    y += 18;
+  }
 
   if ((c.productosVendidos || []).length) {
     titulo("Productos vendidos");

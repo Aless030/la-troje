@@ -52,8 +52,15 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
           <span>EFECTIVO A ENTREGAR</span>
           <span>{bs(efectivoAEntregar)}</span>
         </div>
+        {Number(cierre.cajaChica) > 0 && (
+          <div className="reporte-cierre__fila">
+            <span>CAJA CHICA (con la que abrió, informativa)</span>
+            <span>{bs(cierre.cajaChica)}</span>
+          </div>
+        )}
         <p className="reporte-cierre__nota">
-          Efectivo a entregar = ventas totales − QR − gastos. El QR no se entrega en mano.
+          Efectivo a entregar = ventas totales − QR − gastos. El QR no se entrega en mano. La caja chica no se suma
+          ni se resta.
         </p>
       </div>
 
