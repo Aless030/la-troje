@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
-import { buscarAperturaActiva, cerrarTurno, construirCierre } from "../utils/Turno";
+import { buscarAperturasActivas, cerrarTurno, construirCierre } from "../utils/Turno";
 
 const ETIQUETAS_DIA = {
   jueves: "Jueves",
@@ -33,7 +33,13 @@ export default function CierreCaja() {
   // Reporte que se está mirando: el que se generó al cerrar, o uno del historial.
   const [reporteVisto, setReporteVisto] = useState(null);
 
-  const aperturaActiva = useMemo(() => buscarAperturaActiva(aperturasCaja), [aperturasCaja]);
+  // Varias cajas pueden estar abiertas a la vez: se elige cuál ver / cerrar.
+  const [aperturaIdElegida, setAperturaIdElegida] = useState(null);
+  const aperturasActivas = useMemo(() => buscarAperturasActivas(aperturasCaja), [aperturasCaja]);
+  const aperturaActiva = useMemo(
+    () => aperturasActivas.find((a) => a.id === aperturaIdElegida) || aperturasActivas[0] || null,
+    [aperturasActivas, aperturaIdElegida]
+  );
 
   // Vista previa en vivo del turno abierto (aún no está cerrado).
   const vistaPrevia = useMemo(
@@ -59,6 +65,7 @@ export default function CierreCaja() {
         apertura: aperturaActiva, ventas, gastosCaja, aperturasCaja, registrarCierre, cerrarAperturaCaja,
       });
       setReporteVisto(cierre);
+      setAperturaIdElegida(null);
     } catch (err) {
       console.error(err);
       setMensaje("No se pudo cerrar el turno. Intenta de nuevo.");
@@ -111,6 +118,22 @@ export default function CierreCaja() {
 
       {aperturaActiva ? (
         <>
+          {aperturasActivas.length > 1 && (
+            <div className="cajas-abiertas">
+              <span className="cajas-abiertas__titulo">Cajas abiertas</span>
+              {aperturasActivas.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`caja-tab ${a.id === aperturaActiva.id ? "caja-tab--activa" : ""}`}
+                  onClick={() => setAperturaIdElegida(a.id)}
+                >
+                  <strong>{a.barra === "interior" ? "Interior" : "Semicubierto"}</strong>
+                  <span>{a.cajera}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <ReporteCierre cierre={vistaPrevia} titulo="Turno abierto (así va hasta ahora)" />
           <div className="formulario__acciones">
             <button className="boton boton--peligro" onClick={cerrarElTurno} disabled={cerrando}>

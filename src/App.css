@@ -423,7 +423,9 @@
 }
 
 .precio-con-editar input {
-  flex: 1;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
 }
 
 .celda-editable {
@@ -987,4 +989,94 @@
   color: var(--d-texto);
   min-width: 38px;
   text-align: right;
+}
+
+
+/* --- Boton "Cambiar" (precio) bien visible --- */
+.boton--cambiar {
+  flex-shrink: 0;
+  background: #0D0D0D;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.boton--cambiar:hover:not(:disabled) {
+  background: #2563EB;
+}
+
+.boton--cambiar:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* --- Cajas abiertas (varias a la vez) --- */
+.cajas-abiertas {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.cajas-abiertas__titulo {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texto-suave);
+  margin-right: 4px;
+}
+
+.caja-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 16px;
+  border: 1.5px solid var(--borde);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.caja-tab strong {
+  font-size: 14px;
+}
+
+.caja-tab span {
+  font-size: 12px;
+  color: var(--texto-suave);
+}
+
+.caja-tab:hover {
+  border-color: #0D0D0D;
+}
+
+.caja-tab--activa {
+  background: #0D0D0D;
+  border-color: #0D0D0D;
+  color: #fff;
+}
+
+.caja-tab--activa span {
+  color: #C9C9C9;
+}
+
+.caja-tab--nueva {
+  justify-content: center;
+  border-style: dashed;
+  font-size: 13.5px;
+  font-weight: 600;
 }

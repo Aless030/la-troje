@@ -21,6 +21,25 @@ export function buscarAperturaActiva(aperturas) {
   return abiertas[0] || null;
 }
 
+// Todas las cajas abiertas a la vez (ej. Interior y Semicubierto). Cada una descuenta del
+// inventario de su propia barra. Si por un doble clic hay dos iguales (misma cajera y barra),
+// se queda la más reciente. Se ordenan de la más antigua a la más nueva (pestañas estables).
+export function buscarAperturasActivas(aperturas) {
+  const ahora = Date.now();
+  const abiertas = aperturas
+    .filter((a) => a.estado === "abierta" && ahora - new Date(a.fecha).getTime() < VENTANA_APERTURA_MS)
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  const vistas = new Set();
+  const unicas = [];
+  abiertas.forEach((a) => {
+    const clave = `${a.barra}|${String(a.cajera || "").trim().toLowerCase()}`;
+    if (vistas.has(clave)) return;
+    vistas.add(clave);
+    unicas.push(a);
+  });
+  return unicas.reverse();
+}
+
 export function diaDeFecha(fechaIso) {
   const d = new Date(fechaIso).getDay();
   if (d === 4) return { dia: "jueves", diaEtiqueta: "Jueves" };

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
-import { buscarAperturaActiva, cerrarTurno } from "../utils/Turno";
+import { buscarAperturasActivas, cerrarTurno } from "../utils/Turno";
 import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/Dosiscasa";
 
 function fechaHoyISO() {
@@ -61,9 +61,18 @@ export default function Ventas() {
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
   const [abriendo, setAbriendo] = useState(false);
   const [reporteCierre, setReporteCierre] = useState(null);
+  // Varias cajas pueden estar abiertas a la vez (ej. Interior y Semicubierto).
+  const [aperturaIdElegida, setAperturaIdElegida] = useState(null);
+  const [abriendoOtra, setAbriendoOtra] = useState(false);
 
-  // Caja abierta (la más reciente de las últimas 24 h).
-  const aperturaActiva = useMemo(() => buscarAperturaActiva(aperturasCaja), [aperturasCaja]);
+  // Cajas abiertas (últimas 24 h) y la que se está usando ahora para vender.
+  const aperturasActivas = useMemo(() => buscarAperturasActivas(aperturasCaja), [aperturasCaja]);
+  const aperturaActiva = useMemo(
+    () => aperturasActivas.find((a) => a.id === aperturaIdElegida) || aperturasActivas[0] || null,
+    [aperturasActivas, aperturaIdElegida]
+  );
+  // Si se está abriendo otra caja se oculta la caja actual para no confundir.
+  const cajaVisible = aperturaActiva && !abriendoOtra;
 
   // La barra activa es la de la caja abierta (así no depende del formulario al recargar).
   const campoActivo = campoBarra(aperturaActiva?.barra || form.barra);
@@ -216,6 +225,23 @@ export default function Ventas() {
     setForm((f) => ({ ...f, barra, productoId: "" }));
   }
 
+  // Cambia de caja (ej. de Interior a Semicubierto). Cada caja vende y descuenta de su barra.
+  function elegirCaja(a) {
+    setAbriendoOtra(false);
+    if (a.id === aperturaActiva?.id) return;
+    if (
+      productosComanda.length > 0 &&
+      !window.confirm("Tienes productos sin registrar en esta comanda. Si cambias de caja se perderán. ¿Cambiar de caja?")
+    )
+      return;
+    setAperturaIdElegida(a.id);
+    setProductosComanda([]);
+    setForm({ ...VACIO, cajera: a.cajera, barra: a.barra });
+    setPrecioEditado("");
+    setEditandoPrecio(false);
+    setError("");
+  }
+
   async function abrirCaja(e) {
     e.preventDefault();
     if (abriendo) return;
@@ -228,14 +254,18 @@ export default function Ventas() {
     if (meseros.length === 0) return setMensajeApertura("Escribe al menos un mesero.");
     setAbriendo(true);
     try {
-      await registrarAperturaCaja({
+      const nuevaId = await registrarAperturaCaja({
         fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
       });
       setReporteCierre(null);
-      setForm((f) => ({ ...f, cajera, barra: aperturaForm.barra, mesero: "", comanda: "" }));
+      setProductosComanda([]);
+      setForm({ ...VACIO, cajera, barra: aperturaForm.barra });
+      if (nuevaId) setAperturaIdElegida(nuevaId);
+      setAbriendoOtra(false);
+      setAperturaForm({ cajera: "", cajaChica: "", barra: aperturaForm.barra === "interior" ? "semicubierto" : "interior", meseros: "" });
     } catch (err) {
       console.error(err);
-      setMensajeApertura(err?.message === "Ya hay una caja abierta." ? err.message : "No se pudo abrir la caja.");
+      setMensajeApertura(String(err?.message || "").startsWith("Ya hay") ? err.message : "No se pudo abrir la caja.");
     } finally {
       setAbriendo(false);
     }
@@ -302,7 +332,8 @@ export default function Ventas() {
 
   async function cerrarCajaDelDia() {
     if (!aperturaActiva || cerrandoCaja) return;
-    if (!window.confirm("¿Cerrar la caja? Se generará el reporte de la cajera y después tendrás que hacer una nueva apertura para seguir vendiendo.")) return;
+    const barraCierre = BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra;
+    if (!window.confirm(`¿Cerrar la caja de ${aperturaActiva.cajera} (${barraCierre})? Se generará su reporte. Las otras cajas abiertas siguen funcionando.`)) return;
     setCerrandoCaja(true);
     setError("");
     try {
@@ -312,6 +343,8 @@ export default function Ventas() {
       setReporteCierre(cierre);
       setProductosComanda([]);
       setForm(VACIO);
+      setAperturaIdElegida(null);
+      setAbriendoOtra(false);
       // Limpia mensajes y formularios para que no parezca que la caja se abrió otra vez.
       setMensajeApertura("");
       setMensajeGasto("");
@@ -421,7 +454,36 @@ export default function Ventas() {
         />
       )}
 
-      {!aperturaActiva ? (
+      {aperturasActivas.length > 0 && (
+        <div className="cajas-abiertas">
+          <span className="cajas-abiertas__titulo">Cajas abiertas</span>
+          {aperturasActivas.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`caja-tab ${cajaVisible && a.id === aperturaActiva?.id ? "caja-tab--activa" : ""}`}
+              onClick={() => elegirCaja(a)}
+            >
+              <strong>{BARRAS.find((b) => b.valor === a.barra)?.etiqueta || a.barra}</strong>
+              <span>{a.cajera}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`caja-tab caja-tab--nueva ${abriendoOtra ? "caja-tab--activa" : ""}`}
+            onClick={() => {
+              // Propone la barra que todavía no tiene caja abierta.
+              const libre = BARRAS.find((b) => !aperturasActivas.some((a) => a.barra === b.valor));
+              if (libre) setAperturaForm((f) => ({ ...f, barra: libre.valor }));
+              setAbriendoOtra((v) => !v);
+            }}
+          >
+            + Abrir otra caja
+          </button>
+        </div>
+      )}
+
+      {!cajaVisible ? (
         <form className="formulario" onSubmit={abrirCaja}>
           <h2>Apertura de caja</h2>
           <div className="formulario__fila">
@@ -449,9 +511,16 @@ export default function Ventas() {
             </label>
           </div>
           {mensajeApertura && <div className="formulario__error">{mensajeApertura}</div>}
-          <button type="submit" className="boton boton--primario" disabled={abriendo}>
-            {abriendo ? "Abriendo caja…" : "Abrir caja"}
-          </button>
+          <div className="formulario__acciones">
+            <button type="submit" className="boton boton--primario" disabled={abriendo}>
+              {abriendo ? "Abriendo caja…" : "Abrir caja"}
+            </button>
+            {abriendoOtra && (
+              <button type="button" className="boton boton--fantasma" onClick={() => setAbriendoOtra(false)}>
+                Cancelar
+              </button>
+            )}
+          </div>
         </form>
       ) : (
         <section className="lista-reciente">
@@ -463,7 +532,7 @@ export default function Ventas() {
         </section>
       )}
 
-      {aperturaActiva && (
+      {cajaVisible && (
       <form className="formulario" onSubmit={enviar}>
         <div className="formulario__fila">
           <label>
@@ -583,14 +652,15 @@ export default function Ventas() {
                 <input type="text" value={precioSugerido ? `Bs ${precioSugerido.toFixed(2)}` : "—"} disabled />
                 <button
                   type="button"
-                  className="boton boton--enlace"
+                  className="boton boton--cambiar"
                   onClick={() => {
                     setPrecioEditado(String(precioSugerido || ""));
                     setEditandoPrecio(true);
                   }}
                   disabled={!itemSel}
+                  title="Cambiar el precio de venta"
                 >
-                  Cambiar
+                  ✎ Cambiar
                 </button>
               </div>
             )}
@@ -718,7 +788,7 @@ export default function Ventas() {
       </form>
       )}
 
-      {aperturaActiva && (
+      {cajaVisible && (
       <form className="formulario" onSubmit={guardarGasto}>
         <h2>Gastos</h2>
         <div className="formulario__fila">
@@ -731,7 +801,7 @@ export default function Ventas() {
       </form>
       )}
 
-      {aperturaActiva && gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id).length > 0 && (
+      {cajaVisible && gastosCaja.filter((g) => g.aperturaId === aperturaActiva.id).length > 0 && (
         <section className="lista-reciente">
           <h2>Gastos de esta caja</h2>
           <table className="tabla"><thead><tr><th>Concepto</th><th>Monto</th><th>Observaciones</th></tr></thead><tbody>

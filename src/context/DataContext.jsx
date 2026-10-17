@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db, ensureAuth } from "../firebase";
-import { buscarAperturaActiva } from "../utils/Turno";
+import { buscarAperturasActivas } from "../utils/Turno";
 
 const DataContext = createContext(null);
 
@@ -259,12 +259,19 @@ export function DataProvider({ children }) {
 
 
   async function registrarAperturaCaja(apertura) {
-    if (buscarAperturaActiva(aperturasCaja)) throw new Error("Ya hay una caja abierta.");
-    await addDoc(collection(db, "aperturasCaja"), {
+    // Pueden estar abiertas varias cajas a la vez (una por barra o por cajera),
+    // pero no dos iguales (misma cajera y misma barra).
+    const nombre = String(apertura.cajera || "").trim().toLowerCase();
+    const repetida = buscarAperturasActivas(aperturasCaja).some(
+      (a) => a.barra === apertura.barra && String(a.cajera || "").trim().toLowerCase() === nombre
+    );
+    if (repetida) throw new Error("Ya hay una caja abierta para esta cajera en esta barra.");
+    const ref = await addDoc(collection(db, "aperturasCaja"), {
       ...apertura,
       estado: "abierta",
       creadoEn: serverTimestamp(),
     });
+    return ref.id;
   }
 
   async function cerrarAperturaCaja(id, datosCierre = {}) {
