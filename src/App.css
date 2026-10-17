@@ -143,7 +143,7 @@
 /* --- Cards / metrics --- */
 .tarjetas-resumen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 14px;
   margin-bottom: 28px;
 }
@@ -193,7 +193,7 @@
 /* --- Quick access grid on main menu --- */
 .grilla-accesos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 14px;
 }
 
@@ -248,7 +248,7 @@
 
 .formulario__fila {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   gap: 14px;
 }
 
@@ -491,7 +491,7 @@
 /* --- Charts grid --- */
 .grilla-graficos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 18px;
   margin-bottom: 24px;
 }
@@ -579,11 +579,11 @@
     z-index: 40;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
-    box-shadow: 12px 0 30px rgba(0, 0, 0, 0.3);
   }
 
   .sidebar--abierto {
     transform: translateX(0);
+    box-shadow: 12px 0 30px rgba(0, 0, 0, 0.3);
   }
 
   .sidebar__overlay {
@@ -767,13 +767,13 @@
 /* --- KPIs --- */
 .dash__kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
   gap: 14px;
   margin-bottom: 20px;
 }
 
 .dash__kpis--dos {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   margin-top: 20px;
   margin-bottom: 0;
 }
@@ -1332,4 +1332,283 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+
+/* =========================================================
+   CAMPOS FUERA DE UN <form class="formulario">
+   (buscadores, filtros de fecha, "Ver" en cierres...)
+   ========================================================= */
+.formulario__fila label,
+.lista-reciente label,
+.panel-filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.formulario__fila label > input,
+.formulario__fila label > select,
+.formulario__fila label > textarea,
+.lista-reciente label > input,
+.lista-reciente label > select,
+.lista-reciente label > textarea,
+.panel-filtros label > input,
+.panel-filtros label > select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--texto);
+  background: #fff;
+}
+
+.formulario__fila label > input:focus,
+.formulario__fila label > select:focus,
+.formulario__fila label > textarea:focus,
+.lista-reciente label > input:focus,
+.lista-reciente label > select:focus,
+.lista-reciente label > textarea:focus,
+.panel-filtros label > input:focus,
+.panel-filtros label > select:focus {
+  outline: none;
+  border-color: var(--dorado);
+  box-shadow: 0 0 0 3px rgba(59, 108, 212, 0.22);
+}
+
+.formulario__fila label > input:disabled,
+.formulario__fila label > select:disabled {
+  background: var(--crema);
+  color: var(--texto-suave);
+}
+
+/* Filas de filtros sueltas en la página (ej. Reportes: Desde / Hasta) */
+.pagina > .formulario__fila {
+  margin-bottom: 20px;
+}
+
+.lista-reciente > .formulario__fila {
+  margin-bottom: 16px;
+}
+
+/* En todos los formularios: los campos nunca se salen de su columna */
+.formulario label > input,
+.formulario label > select,
+.formulario label > textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  min-height: 42px;
+  min-width: 0;
+  max-width: 100%;
+  font-family: inherit;
+}
+
+/* =========================================================
+   CELULARES
+   ========================================================= */
+@media (max-width: 860px) {
+  /* El navegador del celular hace zoom si el texto del campo es menor a 16px */
+  input,
+  select,
+  textarea,
+  .celda-editable {
+    font-size: 16px !important;
+  }
+
+  .sidebar {
+    width: min(82vw, 290px);
+  }
+
+  .app__boton-menu {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: -8px;
+  }
+
+  /* Botones fáciles de tocar */
+  .boton {
+    min-height: 44px;
+  }
+
+  .ajuste-stock button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .sidebar__item {
+    padding: 13px 12px;
+  }
+
+  /* Tablas: se desplazan de lado dentro de su tarjeta en vez de romper la página */
+  .tabla {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabla th,
+  .tabla td {
+    white-space: nowrap;
+    padding: 9px 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app__contenido {
+    padding: 16px 12px 40px;
+  }
+
+  .pagina__cabecera {
+    margin-bottom: 16px;
+  }
+
+  .pagina__cabecera h1 {
+    font-size: 24px;
+  }
+
+  .formulario {
+    padding: 16px 14px;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .formulario__fila {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+    gap: 12px;
+  }
+
+  .lista-reciente {
+    padding: 14px 12px;
+    margin-bottom: 18px;
+  }
+
+  .lista-reciente h2,
+  .formulario h2 {
+    font-size: 17px;
+  }
+
+  .tarjetas-resumen {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .tarjeta-metrica {
+    padding: 12px 12px;
+  }
+
+  .tarjeta-metrica__valor {
+    font-size: 19px;
+    overflow-wrap: anywhere;
+  }
+
+  .tarjeta-metrica__etiqueta {
+    font-size: 11px;
+  }
+
+  .grilla-accesos {
+    grid-template-columns: 1fr;
+  }
+
+  /* Pestañas: una sola fila que se desliza con el dedo */
+  .pestañas {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 0 12px 4px;
+  }
+
+  .pestañas::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pestañas__item {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Cajas abiertas (Venta): también se deslizan */
+  .cajas-abiertas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 0 12px 4px;
+  }
+
+  .cajas-abiertas::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cajas-abiertas__titulo {
+    display: none;
+  }
+
+  .caja-tab {
+    flex-shrink: 0;
+  }
+
+  .formulario__acciones .boton,
+  .formulario > .boton {
+    flex: 1 1 100%;
+  }
+
+  .reporte-cierre__fila {
+    gap: 10px;
+  }
+
+  /* Dashboard */
+  .dash__cabecera h1 {
+    font-size: 24px;
+  }
+
+  .dash__filtros {
+    width: 100%;
+  }
+
+  .dash__filtros label {
+    flex: 1 1 130px;
+  }
+
+  .dash-panel {
+    padding: 14px 12px 10px;
+  }
+
+  .dash-kpi {
+    padding: 14px;
+  }
+
+  /* Login */
+  .login__tarjeta {
+    padding: 22px 18px;
+  }
+}
+
+/* Teléfonos angostos: los formularios van en una sola columna */
+@media (max-width: 480px) {
+  .formulario__fila {
+    grid-template-columns: 1fr;
+  }
+
+  .tarjeta-metrica__valor {
+    font-size: 17px;
+  }
 }

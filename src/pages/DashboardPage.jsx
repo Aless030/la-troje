@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -78,6 +78,13 @@ export default function DashboardPage() {
   const { ventas: todasLasVentas, productos } = useData();
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  // En celulares el gráfico de barras necesita menos espacio para los nombres.
+  const [movil, setMovil] = useState(() => window.innerWidth < 560);
+  useEffect(() => {
+    const alCambiar = () => setMovil(window.innerWidth < 560);
+    window.addEventListener("resize", alCambiar);
+    return () => window.removeEventListener("resize", alCambiar);
+  }, []);
 
   // Filtra por fechas y deja fuera las cortesías (no son venta ni se suman).
   const ventas = useMemo(
@@ -179,10 +186,10 @@ export default function DashboardPage() {
             <p className="dash__vacio">No hay ventas en este período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={datos.top5} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 4 }}>
+              <BarChart data={datos.top5} layout="vertical" margin={{ top: 4, right: movil ? 28 : 36, left: movil ? 0 : 8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="producto" width={130} tick={{ fontSize: 12.5, fill: "#1F2937", fontWeight: 500 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="producto" width={movil ? 88 : 130} tick={{ fontSize: movil ? 11 : 12.5, fill: "#1F2937", fontWeight: 500 }} axisLine={false} tickLine={false} />
                 <Tooltip cursor={{ fill: "rgba(59,108,212,0.08)" }} contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} labelStyle={{ color: "#9CA3AF" }} formatter={(v) => [v, "Unidades"]} />
                 <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={26}>
                   {datos.top5.map((_, i) => (
