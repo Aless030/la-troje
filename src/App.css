@@ -1086,3 +1086,250 @@
   font-size: 13.5px;
   font-weight: 600;
 }
+
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: linear-gradient(160deg, #1E293B 0%, #263757 55%, #31497F 100%);
+}
+
+.login__contenido {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo--login {
+  width: 150px;
+  height: 86px;
+  margin-bottom: 10px;
+}
+
+.login__marca {
+  font-family: "Fraunces", serif;
+  font-size: 28px;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  margin: 0;
+}
+
+.login__sub {
+  margin: 2px 0 22px;
+  color: #A9B6CC;
+  font-size: 14px;
+}
+
+.login__tarjeta {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.login__tarjeta h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--marron-oscuro);
+}
+
+.login__tarjeta label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.login__tarjeta input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--texto);
+  background: #F8FAFC;
+}
+
+.login__tarjeta input:focus {
+  outline: none;
+  border-color: var(--dorado);
+  box-shadow: 0 0 0 3px rgba(59, 108, 212, 0.22);
+  background: #fff;
+}
+
+.login__clave {
+  position: relative;
+}
+
+.login__clave input {
+  padding-right: 70px;
+}
+
+.login__ver {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--dorado);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+.login__boton {
+  width: 100%;
+  padding: 13px;
+  font-size: 15px;
+}
+
+.login__ayuda {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--texto-suave);
+}
+
+.login__enlace {
+  border: none;
+  background: none;
+  color: var(--dorado);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px;
+  text-align: center;
+}
+
+.login__enlace:hover {
+  text-decoration: underline;
+}
+
+.cargando--oscuro {
+  color: #CBD5E1;
+}
+
+.cargando--oscuro .cargando__grano {
+  color: #ffffff;
+}
+
+/* --- Usuario en el menu lateral --- */
+.sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebar__usuario {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar__usuario-datos {
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+  min-width: 0;
+}
+
+.sidebar__usuario-nombre {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__usuario-rol {
+  font-size: 12px;
+  color: #94A3B8;
+}
+
+.sidebar__salir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.07);
+  border: none;
+  border-radius: 10px;
+  color: #E2E8F0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sidebar__salir:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+/* --- Pantalla de usuarios --- */
+.tabla-scroll {
+  overflow-x: auto;
+}
+
+.celda-editable--ancha {
+  width: auto;
+  min-width: 190px;
+}
+
+.etiqueta-yo {
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+
+.estado-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.estado-pill--ok {
+  background: #E5F3EC;
+  color: var(--verde);
+}
+
+.estado-pill--off {
+  background: #FBEAEC;
+  color: var(--rojo);
+}
+
+.tabla__fila--inactiva td {
+  opacity: 0.55;
+}
+
+.celda-acciones {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

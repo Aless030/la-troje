@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { esSoloLectura } from "../utils/permisos";
 import { descargarCSV } from "../utils/csv";
 import { descargarPDF } from "../utils/pdf";
 
@@ -12,6 +14,9 @@ function dentroDeRango(fechaIso, desde, hasta) {
 
 export default function Reportes() {
   const { ventas, productos, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
+  // El socio auxiliar solo mira: no ve la pestaña de ajustes (que escribe en el inventario).
+  const { perfil } = useAuth();
+  const soloLectura = esSoloLectura(perfil?.rol);
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [vista, setVista] = useState("mesero");
@@ -422,15 +427,17 @@ export default function Reportes() {
         >
           Inventario y barras
         </button>
-        <button
-          className={`pestañas__item ${vista === "ajuste" ? "pestañas__item--activa" : ""}`}
-          onClick={() => setVista("ajuste")}
-        >
-          Ajuste de inventario
-        </button>
+        {!soloLectura && (
+          <button
+            className={`pestañas__item ${vista === "ajuste" ? "pestañas__item--activa" : ""}`}
+            onClick={() => setVista("ajuste")}
+          >
+            Ajuste de inventario
+          </button>
+        )}
       </div>
 
-      {vista === "ajuste" ? (
+      {vista === "ajuste" && !soloLectura ? (
         <>
           <p className="texto-vacio">
             Ingresa la apertura (stock con el que empezó el evento) y, al final, el saldo real contado.

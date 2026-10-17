@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { DataProvider, useData } from "./context/DataContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { puedeVer, rolValido, ROLES, vistaInicial, vistasDe } from "./utils/permisos";
 import Sidebar from "./components/Sidebar";
 import Logo from "./components/Logo";
 import MenuPrincipal from "./pages/MenuPrincipal";
@@ -12,9 +14,11 @@ import Reportes from "./pages/Reportes";
 import DashboardPage from "./pages/DashboardPage";
 import MovimientosCaja from "./pages/MovimientosCaja";
 import Semanales from "./pages/Semanales";
+import Usuarios from "./pages/Usuarios";
+import Login, { SinAcceso } from "./pages/Login";
 import "./App.css";
 
-function Contenido({ vista, setVista }) {
+function Contenido({ vista, setVista, rol }) {
   const { listo } = useData();
 
   if (!listo) {
@@ -25,6 +29,9 @@ function Contenido({ vista, setVista }) {
       </div>
     );
   }
+
+  // Seguridad en pantalla: si el rol no puede ver esta vista, se muestra la suya.
+  if (!puedeVer(rol, vista)) vista = vistaInicial(rol);
 
   switch (vista) {
     case "ventas":
@@ -45,13 +52,16 @@ function Contenido({ vista, setVista }) {
       return <MovimientosCaja />;
     case "semanal":
       return <Semanales />;
+    case "usuarios":
+      return <Usuarios />;
     default:
-      return <MenuPrincipal irA={setVista} />;
+      return <MenuPrincipal irA={setVista} permitidas={vistasDe(rol)} />;
   }
 }
 
-export default function App() {
-  const [vista, setVista] = useState("menu");
+function Aplicacion({ perfil }) {
+  const { salir } = useAuth();
+  const [vista, setVista] = useState(vistaInicial(perfil.rol));
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
 
   return (
@@ -62,6 +72,10 @@ export default function App() {
           setVista={setVista}
           abierto={sidebarAbierto}
           setAbierto={setSidebarAbierto}
+          vistasPermitidas={vistasDe(perfil.rol)}
+          perfil={perfil}
+          rolEtiqueta={ROLES[perfil.rol].etiqueta}
+          onSalir={salir}
         />
         <div className="app__principal">
           <div className="app__barra-movil">
@@ -74,10 +88,40 @@ export default function App() {
             <span>LA TROJE</span>
           </div>
           <main className="app__contenido">
-            <Contenido vista={vista} setVista={setVista} />
+            <Contenido vista={vista} setVista={setVista} rol={perfil.rol} />
           </main>
         </div>
       </div>
     </DataProvider>
+  );
+}
+
+// Decide qué mostrar según la sesión: cargando, login, sin acceso o la aplicación.
+function Portal() {
+  const { usuario, perfil, cargando, ocupado } = useAuth();
+
+  if (cargando && !ocupado) {
+    return (
+      <div className="login">
+        <div className="cargando cargando--oscuro">
+          <div className="cargando__grano">◆</div>
+          <p>Cargando…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!usuario || ocupado) return <Login />;
+  if (!perfil) return <SinAcceso motivo="sinperfil" />;
+  if (perfil.activo === false) return <SinAcceso motivo="desactivada" />;
+  if (!rolValido(perfil.rol)) return <SinAcceso motivo="rol" />;
+  // key: al cambiar de usuario en el mismo navegador se reinicia todo (vista y datos).
+  return <Aplicacion key={usuario.uid} perfil={perfil} />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Portal />
+    </AuthProvider>
   );
 }

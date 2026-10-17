@@ -12,7 +12,7 @@ function esHoy(fechaIso) {
   );
 }
 
-export default function MenuPrincipal({ irA }) {
+export default function MenuPrincipal({ irA, permitidas }) {
   const { ventas, productos, movimientos } = useData();
 
   const resumenHoy = useMemo(() => {
@@ -29,7 +29,7 @@ export default function MenuPrincipal({ irA }) {
     };
   }, [ventas, productos]);
 
-  const accesos = [
+  const todosLosAccesos = [
     { id: "ventas", titulo: "Registrar venta", detalle: "Nueva venta con mesero y forma de pago" },
     { id: "inventario", titulo: "Inventario", detalle: "Cargar productos y ver existencias" },
     { id: "distribucion", titulo: "Distribución", detalle: "Repartir productos a las barras" },
@@ -40,6 +40,8 @@ export default function MenuPrincipal({ irA }) {
     { id: "movimientos", titulo: "Movimientos de caja", detalle: "Sueldos, proveedores y facturas" },
     { id: "semanal", titulo: "Semanales", detalle: "Ingresos y gastos de la semana" },
   ];
+  // Solo las pantallas a las que este usuario puede entrar.
+  const accesos = permitidas ? todosLosAccesos.filter((a) => permitidas.includes(a.id)) : todosLosAccesos;
 
   return (
     <div className="pagina">
