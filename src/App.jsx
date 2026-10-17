@@ -66,7 +66,9 @@ export default function App() {
         <div className="app__principal">
           <div className="app__barra-movil">
             <button className="app__boton-menu" onClick={() => setSidebarAbierto(true)}>
-              ☰
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
             <Logo clase="logo--barra" />
             <span>LA TROJE</span>

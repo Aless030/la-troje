@@ -1,16 +1,16 @@
 :root {
-  --marron-oscuro: #0d0d0d;   /* negro principal */
-  --marron-medio: #3a3a3a;
-  --dorado: #0d0d0d;          /* acento = negro */
-  --dorado-suave: #d9d9d9;
-  --crema: #f2f2f2;           /* fondo gris muy claro */
-  --crema-panel: #ffffff;
-  --verde: #1f1f1f;
-  --rojo: #0d0d0d;
-  --texto: #111111;
-  --texto-suave: #666666;
-  --borde: #dcdcdc;
-  --sombra: 0 4px 14px rgba(0, 0, 0, 0.06);
+  --marron-oscuro: #1E293B;   /* azul pizarra: menú lateral y títulos */
+  --marron-medio: #475569;
+  --dorado: #3B6CD4;          /* acento azul suave */
+  --dorado-suave: #DBE5F7;
+  --crema: #F4F6FA;           /* fondo de la página */
+  --crema-panel: #FFFFFF;
+  --verde: #1F7A5C;
+  --rojo: #B83A4B;
+  --texto: #1F2937;
+  --texto-suave: #64748B;
+  --borde: #E2E8F0;
+  --sombra: 0 2px 10px rgba(30, 41, 59, 0.07);
   --radio: 10px;
 }
 
@@ -40,7 +40,7 @@
   align-items: center;
   gap: 10px;
   padding: 0 8px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 16px;
 }
 
@@ -58,7 +58,7 @@
 
 .sidebar__sub {
   font-size: 12px;
-  color: #b5b5b5;
+  color: #94A3B8;
 }
 
 .sidebar__nav {
@@ -73,7 +73,7 @@
   gap: 10px;
   background: transparent;
   border: none;
-  color: #e6e6e6;
+  color: #CBD5E1;
   text-align: left;
   padding: 11px 12px;
   border-radius: 10px;
@@ -82,18 +82,24 @@
 }
 
 .sidebar__item:hover {
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
-.sidebar__item--activo {
-  background: #ffffff;
-  color: #0d0d0d;
+.sidebar__item--activo,
+.sidebar__item--activo:hover {
+  background: var(--dorado);
+  color: #ffffff;
   font-weight: 600;
 }
 
 .sidebar__icono {
-  width: 18px;
-  text-align: center;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .sidebar__overlay {
@@ -206,7 +212,7 @@
 
 .tarjeta-acceso:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 12px 28px rgba(30, 41, 59, 0.14);
 }
 
 .tarjeta-acceso__titulo {
@@ -276,7 +282,7 @@
 .formulario textarea:focus {
   outline: none;
   border-color: var(--dorado);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 3px rgba(59, 108, 212, 0.22);
 }
 
 .formulario__total {
@@ -293,7 +299,7 @@
 }
 
 .formulario__error {
-  background: #ececec;
+  background: #FBEAEC;
   color: var(--rojo);
   padding: 10px 14px;
   border-radius: 9px;
@@ -301,7 +307,7 @@
 }
 
 .formulario__error--exito {
-  background: #ececec;
+  background: #E5F3EC;
   color: var(--verde);
 }
 
@@ -321,7 +327,7 @@
 }
 
 .boton--primario {
-  background: #0d0d0d;
+  background: var(--dorado);
   color: #ffffff;
 }
 
@@ -392,7 +398,7 @@
 }
 
 .tabla__fila--alerta td {
-  background: #ececec;
+  background: #FBEAEC;
 }
 
 .texto-vacio {
@@ -401,7 +407,7 @@
 }
 
 .aviso {
-  background: #ececec;
+  background: #FBEAEC;
   color: var(--rojo);
   border-radius: 10px;
   padding: 12px 16px;
@@ -441,7 +447,7 @@
 .celda-editable:focus {
   outline: none;
   border-color: var(--dorado);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 2px rgba(59, 108, 212, 0.22);
 }
 
 .celda-editable--stock {
@@ -671,9 +677,9 @@
    DASHBOARD
    ========================================================= */
 .dash {
-  --d-borde: #E5E7EB;
-  --d-texto: #111827;
-  --d-suave: #6B7280;
+  --d-borde: #E2E8F0;
+  --d-texto: #1F2937;
+  --d-suave: #64748B;
   font-family: "Inter", system-ui, sans-serif;
 }
 
@@ -692,7 +698,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0 0 4px;
-  color: #0D0D0D;
+  color: var(--marron-oscuro);
 }
 
 .dash__cabecera p {
@@ -737,14 +743,14 @@
 }
 
 .dash__filtros input:focus {
-  outline: 2px solid #2563EB;
+  outline: 2px solid var(--dorado);
   outline-offset: 1px;
   background: #fff;
 }
 
 .dash__limpiar {
   border: none;
-  background: #0D0D0D;
+  background: var(--marron-oscuro);
   color: #fff;
   border-radius: 8px;
   padding: 9px 14px;
@@ -755,7 +761,7 @@
 }
 
 .dash__limpiar:hover {
-  background: #2563EB;
+  background: var(--dorado);
 }
 
 /* --- KPIs --- */
@@ -781,7 +787,7 @@
   border: 1px solid var(--d-borde);
   border-radius: 14px;
   padding: 18px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(17, 24, 39, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(30, 41, 59, 0.05);
   overflow: hidden;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -798,7 +804,7 @@
 
 .dash-kpi:hover {
   transform: translateY(-2px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 26px rgba(17, 24, 39, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 26px rgba(30, 41, 59, 0.1);
 }
 
 .dash-kpi__icono {
@@ -849,8 +855,8 @@
 
 /* Tarjeta principal oscura */
 .dash-kpi--oscura {
-  background: linear-gradient(135deg, #0D0D0D 0%, #1B2A4E 100%);
-  border-color: #0D0D0D;
+  background: linear-gradient(135deg, #1E293B 0%, #31497F 100%);
+  border-color: #1E293B;
 }
 
 .dash-kpi--oscura::before {
@@ -863,7 +869,7 @@
 }
 
 .dash-kpi--oscura .dash-kpi__etiqueta {
-  color: #AEB8D0;
+  color: #B6C2DB;
 }
 
 .dash-kpi--oscura .dash-kpi__valor {
@@ -888,7 +894,7 @@
   border: 1px solid var(--d-borde);
   border-radius: 14px;
   padding: 18px 20px 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(17, 24, 39, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(30, 41, 59, 0.05);
 }
 
 .dash-panel__titulo {
@@ -904,7 +910,7 @@
   font-size: 16px;
   font-weight: 700;
   margin: 0;
-  color: #0D0D0D;
+  color: var(--marron-oscuro);
 }
 
 .dash-panel__titulo span {
@@ -995,7 +1001,7 @@
 /* --- Boton "Cambiar" (precio) bien visible --- */
 .boton--cambiar {
   flex-shrink: 0;
-  background: #0D0D0D;
+  background: var(--marron-oscuro);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1008,7 +1014,7 @@
 }
 
 .boton--cambiar:hover:not(:disabled) {
-  background: #2563EB;
+  background: var(--dorado);
 }
 
 .boton--cambiar:disabled {
@@ -1061,17 +1067,17 @@
 }
 
 .caja-tab:hover {
-  border-color: #0D0D0D;
+  border-color: var(--dorado);
 }
 
 .caja-tab--activa {
-  background: #0D0D0D;
-  border-color: #0D0D0D;
+  background: var(--marron-oscuro);
+  border-color: var(--marron-oscuro);
   color: #fff;
 }
 
 .caja-tab--activa span {
-  color: #C9C9C9;
+  color: #A9B6CC;
 }
 
 .caja-tab--nueva {

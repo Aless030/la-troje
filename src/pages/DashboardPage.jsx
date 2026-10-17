@@ -15,15 +15,15 @@ import {
 import { useData } from "../context/DataContext";
 
 // Paleta viva sobre base blanco y negro.
-const AZUL = "#2563EB";
-const VERDE = "#10B981";
-const AMBAR = "#F59E0B";
-const VIOLETA = "#7C3AED";
-const ROSA = "#F43F5E";
+const AZUL = "#3B6CD4";
+const VERDE = "#2FA382";
+const AMBAR = "#E0A030";
+const VIOLETA = "#7C63C9";
+const ROSA = "#D95C70";
 const COLORES = [AZUL, VERDE, AMBAR, VIOLETA, ROSA];
 
 const estiloTooltip = {
-  background: "#0D0D0D",
+  background: "#1E293B",
   border: "none",
   borderRadius: 8,
   color: "#fff",
@@ -180,15 +180,15 @@ export default function DashboardPage() {
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={datos.top5} layout="vertical" margin={{ top: 4, right: 36, left: 8, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 12, fill: "#6B7280" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="producto" width={130} tick={{ fontSize: 12.5, fill: "#111827", fontWeight: 500 }} axisLine={false} tickLine={false} />
-                <Tooltip cursor={{ fill: "rgba(37,99,235,0.06)" }} contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} labelStyle={{ color: "#9CA3AF" }} formatter={(v) => [v, "Unidades"]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="producto" width={130} tick={{ fontSize: 12.5, fill: "#1F2937", fontWeight: 500 }} axisLine={false} tickLine={false} />
+                <Tooltip cursor={{ fill: "rgba(59,108,212,0.08)" }} contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} labelStyle={{ color: "#9CA3AF" }} formatter={(v) => [v, "Unidades"]} />
                 <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={26}>
                   {datos.top5.map((_, i) => (
                     <Cell key={i} fill={COLORES[i % COLORES.length]} />
                   ))}
-                  <LabelList dataKey="cantidad" position="right" style={{ fontSize: 12.5, fontWeight: 700, fill: "#111827" }} />
+                  <LabelList dataKey="cantidad" position="right" style={{ fontSize: 12.5, fontWeight: 700, fill: "#1F2937" }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
