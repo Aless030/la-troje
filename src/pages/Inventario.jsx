@@ -30,7 +30,7 @@ const VACIO = {
 };
 
 export default function Inventario() {
-  const { productos, comprasInventario, actualizarProducto, eliminarProducto, registrarCompra } = useData();
+  const { productos, comprasInventario, actualizarProducto, eliminarProducto, registrarCompra, ponerStockEnCero } = useData();
   const [form, setForm] = useState(VACIO);
   const [error, setError] = useState("");
   const [avisoAuto, setAvisoAuto] = useState("");
@@ -237,6 +237,21 @@ export default function Inventario() {
       destino: "general",
       factura: "",
     });
+  }
+
+  async function reiniciarTodoEnCero() {
+    if (productos.length === 0) return;
+    const ok = window.confirm(
+      `Vas a dejar en 0 el stock de ${productos.length} producto(s) (almacén, interior y semicubierto).\n\nLos productos, precios y recetas NO se borran, pero esto no se puede deshacer.\n\n¿Continuar?`
+    );
+    if (!ok) return;
+    try {
+      const n = await ponerStockEnCero();
+      window.alert(`Listo: ${n} producto(s) con stock en 0.`);
+    } catch (e) {
+      console.error(e);
+      window.alert("No se pudo reiniciar el stock. Revisa tu conexión e intenta de nuevo.");
+    }
   }
 
   async function ajustarStock(p, delta) {
@@ -527,6 +542,14 @@ export default function Inventario() {
         </div>
 
         <h2>Productos ({productosFiltrados.length})</h2>
+        <button
+          type="button"
+          className="boton boton--enlace boton--peligro"
+          onClick={reiniciarTodoEnCero}
+          disabled={productos.length === 0}
+        >
+          Poner todo el stock en 0
+        </button>
         {productosFiltrados.length === 0 ? (
           <p className="texto-vacio">
             {productos.length === 0 ? "Todavía no cargaste productos." : "Ningún producto coincide con la búsqueda."}

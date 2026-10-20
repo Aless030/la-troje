@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db, ensureAuth } from "../firebase";
 import { buscarAperturasActivas } from "../utils/Turno";
@@ -88,6 +89,24 @@ export function DataProvider({ children }) {
 
   async function eliminarProducto(id) {
     await deleteDoc(doc(db, "productos", id));
+  }
+
+  // Deja en 0 el stock (almacén general, interior y semicubierto) de TODOS los
+  // productos, sin borrarlos. Firestore permite máx. 500 escrituras por lote.
+  async function ponerStockEnCero() {
+    const TAMANO_LOTE = 400;
+    for (let i = 0; i < productos.length; i += TAMANO_LOTE) {
+      const lote = writeBatch(db);
+      productos.slice(i, i + TAMANO_LOTE).forEach((p) => {
+        lote.update(doc(db, "productos", p.id), {
+          stock: 0,
+          stockInterior: 0,
+          stockSemicubierto: 0,
+        });
+      });
+      await lote.commit();
+    }
+    return productos.length;
   }
 
   // Descuenta del inventario, de forma segura (transacción), lo que consumió una venta.
@@ -334,6 +353,7 @@ export function DataProvider({ children }) {
     agregarProducto,
     actualizarProducto,
     eliminarProducto,
+    ponerStockEnCero,
     registrarVenta,
     registrarCierre,
     eliminarCierre,
