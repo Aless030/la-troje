@@ -164,27 +164,32 @@ export default function Inventario() {
       const totalNuevo = Math.max(0, Number(cantidadTotal) || 0);
       const diferencia = totalNuevo - totalAnterior;
 
-      let nuevoGeneral = stockGeneralActual;
-      let nuevoInterior = stockInteriorActual;
-      let nuevoSemicubierto = stockSemicubiertoActual;
+      // El ajuste se aplica al "Almacén destino" elegido en el formulario:
+      // si aumenta el total, se suma ahí; si disminuye, se descuenta primero
+      // de ese almacén y, si no alcanza, de los demás.
+      const CAMPOS = { general: "stock", interior: "stockInterior", semicubierto: "stockSemicubierto" };
+      const stocks = {
+        general: stockGeneralActual,
+        interior: stockInteriorActual,
+        semicubierto: stockSemicubiertoActual,
+      };
+      const elegido = CAMPOS[form.destino] ? form.destino : "general";
 
       if (diferencia >= 0) {
-        // Si aumenta el total, el ajuste entra al almacén general.
-        nuevoGeneral += diferencia;
+        stocks[elegido] += diferencia;
       } else {
-        // Si disminuye, descontamos primero del almacén general y luego de las barras.
         let porDescontar = Math.abs(diferencia);
-        const deGeneral = Math.min(nuevoGeneral, porDescontar);
-        nuevoGeneral -= deGeneral;
-        porDescontar -= deGeneral;
-
-        const deInterior = Math.min(nuevoInterior, porDescontar);
-        nuevoInterior -= deInterior;
-        porDescontar -= deInterior;
-
-        const deSemicubierto = Math.min(nuevoSemicubierto, porDescontar);
-        nuevoSemicubierto -= deSemicubierto;
+        const orden = [elegido, ...Object.keys(stocks).filter((k) => k !== elegido)];
+        for (const k of orden) {
+          const quitar = Math.min(stocks[k], porDescontar);
+          stocks[k] -= quitar;
+          porDescontar -= quitar;
+        }
       }
+
+      const nuevoGeneral = stocks.general;
+      const nuevoInterior = stocks.interior;
+      const nuevoSemicubierto = stocks.semicubierto;
 
       await actualizarProducto(editandoId, {
         ...datos,
@@ -462,16 +467,16 @@ export default function Inventario() {
           </label>
         </div>
 
-        {!editandoId && (
-          <div className="formulario__fila">
-            <label>
-              Almacén destino
-              <select value={form.destino} onChange={(e) => actualizar("destino", e.target.value)}>
-                {DESTINOS.map((d) => (
-                  <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
-                ))}
-              </select>
-            </label>
+        <div className="formulario__fila">
+          <label>
+            Almacén destino
+            <select value={form.destino} onChange={(e) => actualizar("destino", e.target.value)}>
+              {DESTINOS.map((d) => (
+                <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
+              ))}
+            </select>
+          </label>
+          {!editandoId && (
             <label>
               N° de factura (opcional)
               <input
@@ -480,8 +485,8 @@ export default function Inventario() {
                 placeholder="Ej: 4546"
               />
             </label>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="formulario__fila">
           {esBebida && esCaja && (
