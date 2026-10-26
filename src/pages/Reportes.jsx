@@ -4,21 +4,18 @@ import { useAuth } from "../context/AuthContext";
 import { esSoloLectura } from "../utils/permisos";
 import { descargarCSV } from "../utils/csv";
 import { descargarPDF } from "../utils/pdf";
+import { eventoDeRegistro, listarEventos, mapaAperturas, nombreArchivoEvento } from "../utils/Evento";
 
-function dentroDeRango(fechaIso, desde, hasta) {
-  const f = new Date(fechaIso).getTime();
-  if (desde && f < new Date(desde + "T00:00:00").getTime()) return false;
-  if (hasta && f > new Date(hasta + "T23:59:59").getTime()) return false;
-  return true;
-}
+const TODOS = "todos";
 
 export default function Reportes() {
-  const { ventas, productos, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
+  const { ventas, productos, aperturasCaja, cierres, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
   // El socio auxiliar solo mira: no ve la pestaña de ajustes (que escribe en el inventario).
   const { perfil } = useAuth();
   const soloLectura = esSoloLectura(perfil?.rol);
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  // Los reportes se sacan por EVENTO (la noche completa), no por fecha: así lo vendido
+  // de madrugada queda en el evento de esa noche. null = el evento más reciente.
+  const [eventoElegido, setEventoElegido] = useState(null);
   const [vista, setVista] = useState("mesero");
 
   // Estado local del formulario de ajuste de inventario: apertura y saldo real
@@ -28,9 +25,27 @@ export default function Reportes() {
   const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [mensajeAjuste, setMensajeAjuste] = useState("");
 
+  const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
+  const eventos = useMemo(
+    () => listarEventos({ aperturas: aperturasCaja, ventas, cierres }),
+    [aperturasCaja, ventas, cierres]
+  );
+  const eventoId =
+    eventoElegido === TODOS
+      ? TODOS
+      : eventoElegido && eventos.some((e) => e.id === eventoElegido)
+      ? eventoElegido
+      : eventos[0]?.id || TODOS;
+  const eventoActual = eventos.find((e) => e.id === eventoId) || null;
+  const textoEvento = eventoActual ? eventoActual.etiqueta : "Todos los eventos";
+  const sufijoArchivo = eventoActual ? nombreArchivoEvento(eventoActual) : "todos-los-eventos";
+
   const ventasFiltradas = useMemo(
-    () => ventas.filter((v) => dentroDeRango(v.fecha, desde, hasta)),
-    [ventas, desde, hasta]
+    () =>
+      eventoId === TODOS
+        ? ventas
+        : ventas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoId),
+    [ventas, aperturasPorId, eventoId]
   );
 
   // Las cortesías no son venta: no se suman a ningún total. Van en su propia pestaña.
@@ -131,7 +146,7 @@ export default function Reportes() {
     return ordenadas.map((v, i) => ({
       n: i + 1,
       comanda: v.comanda || "—",
-      fecha: new Date(v.fecha).toLocaleDateString("es-BO"),
+      fecha: new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
       mesero: v.mesero || "—",
       producto: v.producto,
       unidad: v.unidad || "—",
@@ -148,7 +163,7 @@ export default function Reportes() {
     const ordenadas = [...ventasCortesia].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     return ordenadas.map((v) => ({
       comanda: v.comanda || "—",
-      fecha: new Date(v.fecha).toLocaleDateString("es-BO"),
+      fecha: new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
       mesero: v.mesero || "—",
       producto: v.producto,
       cantidad: v.cantidad,
@@ -158,7 +173,7 @@ export default function Reportes() {
     }));
   }, [ventasCortesia]);
 
-  // Venta total por producto en el rango filtrado, para el ajuste de inventario.
+  // Venta total por producto en el evento elegido, para el ajuste de inventario.
   const ventaPorProducto = useMemo(() => {
     const mapa = {};
     ventasFiltradas.forEach((v) => {
@@ -204,8 +219,8 @@ export default function Reportes() {
         filasAjuste.map((f) =>
           registrarAjusteInventario({
             fecha: new Date().toISOString(),
-            desde: desde || null,
-            hasta: hasta || null,
+            evento: eventoActual ? eventoActual.nombre : "Todos los eventos",
+            eventoId: eventoActual ? eventoActual.id : null,
             productoId: f.productoId,
             producto: f.producto,
             unidad: f.unidad,
@@ -252,7 +267,7 @@ export default function Reportes() {
       columnas: [
         { titulo: "N°", clave: "n" },
         { titulo: "N° comanda", clave: "comanda" },
-        { titulo: "Fecha", clave: "fecha" },
+        { titulo: "Fecha y hora", clave: "fecha" },
         { titulo: "Mesero", clave: "mesero" },
         { titulo: "Producto", clave: "producto" },
         { titulo: "Cantidad", clave: "cantidad" },
@@ -267,7 +282,7 @@ export default function Reportes() {
       titulo: "Cortesías (solo control, no se suman)",
       columnas: [
         { titulo: "N° comanda", clave: "comanda" },
-        { titulo: "Fecha", clave: "fecha" },
+        { titulo: "Fecha y hora", clave: "fecha" },
         { titulo: "Mesero", clave: "mesero" },
         { titulo: "Producto", clave: "producto" },
         { titulo: "Cantidad", clave: "cantidad" },
@@ -288,7 +303,7 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarCSV(`reporte-${vista}`, actual.columnas, filas);
+    descargarCSV(`reporte-${vista}-${sufijoArchivo}`, actual.columnas, filas);
   }
 
   function exportarPDF() {
@@ -298,7 +313,7 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarPDF(actual.titulo, actual.columnas, filas, `reporte-${vista}`);
+    descargarPDF(`${actual.titulo} — ${textoEvento}`, actual.columnas, filas, `reporte-${vista}-${sufijoArchivo}`);
   }
 
   function exportarAjusteCSV() {
@@ -321,7 +336,7 @@ export default function Reportes() {
       saldo: f.saldo.toFixed(2),
       diferencia: f.diferencia.toFixed(2),
     }));
-    descargarCSV("ajuste-inventario", columnas, filas);
+    descargarCSV(`ajuste-inventario-${sufijoArchivo}`, columnas, filas);
   }
 
   function exportarAjustePDF() {
@@ -342,7 +357,7 @@ export default function Reportes() {
       saldo: f.saldo.toFixed(2),
       diferencia: f.diferencia.toFixed(2),
     }));
-    descargarPDF("Ajuste de inventario", columnas, filas, "ajuste-inventario");
+    descargarPDF(`Ajuste de inventario — ${textoEvento}`, columnas, filas, `ajuste-inventario-${sufijoArchivo}`);
   }
 
   const columnasInventario = [
@@ -367,17 +382,18 @@ export default function Reportes() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Reportes</h1>
-        <p>Filtra por fecha y descarga en CSV o PDF.</p>
+        <p>Elige el evento y descarga en CSV o PDF. Cada evento incluye toda la noche, aunque pase de medianoche.</p>
       </header>
 
       <div className="formulario__fila">
         <label>
-          Desde
-          <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-        </label>
-        <label>
-          Hasta
-          <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+          Evento
+          <select value={eventoId} onChange={(e) => setEventoElegido(e.target.value)}>
+            <option value={TODOS}>Todos los eventos</option>
+            {eventos.map((ev) => (
+              <option key={ev.id} value={ev.id}>{ev.etiqueta}</option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -441,7 +457,7 @@ export default function Reportes() {
         <>
           <p className="texto-vacio">
             Ingresa la apertura (stock con el que empezó el evento) y, al final, el saldo real contado.
-            "Final" se calcula solo (apertura − venta del rango filtrado); "Diferencia" es Final − Saldo,
+            "Final" se calcula solo (apertura − venta del evento elegido); "Diferencia" es Final − Saldo,
             para detectar faltantes o sobrantes.
           </p>
           <section className="lista-reciente">
@@ -516,6 +532,7 @@ export default function Reportes() {
                 <thead>
                   <tr>
                     <th>Fecha</th>
+                    <th>Evento</th>
                     <th>Producto</th>
                     <th>Apertura</th>
                     <th>Venta</th>
@@ -529,6 +546,7 @@ export default function Reportes() {
                   {ajustesInventario.slice(0, 40).map((a) => (
                     <tr key={a.id} className={Math.abs(a.diferencia || 0) > 0.01 ? "tabla__fila--alerta" : ""}>
                       <td>{new Date(a.fecha).toLocaleString("es-BO")}</td>
+                      <td>{a.evento || "—"}</td>
                       <td>{a.producto}</td>
                       <td>{Number(a.apertura ?? 0).toFixed(2)}</td>
                       <td>{a.venta ?? 0}</td>

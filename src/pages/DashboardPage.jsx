@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { useData } from "../context/DataContext";
+import { eventoDeRegistro, listarEventos, mapaAperturas } from "../utils/Evento";
 
 // Paleta viva sobre base blanco y negro.
 const AZUL = "#3B6CD4";
@@ -32,12 +33,7 @@ const estiloTooltip = {
   boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
 };
 
-function dentroDeRango(fechaIso, desde, hasta) {
-  const f = new Date(fechaIso).getTime();
-  if (desde && f < new Date(desde + "T00:00:00").getTime()) return false;
-  if (hasta && f > new Date(hasta + "T23:59:59").getTime()) return false;
-  return true;
-}
+const TODOS = "todos";
 
 const bs = (n) => `Bs ${Number(n || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -75,9 +71,15 @@ function Tarjeta({ etiqueta, valor, tipo, color, texto, oscura }) {
 }
 
 export default function DashboardPage() {
-  const { ventas: todasLasVentas, productos } = useData();
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const { ventas: todasLasVentas, productos, aperturasCaja } = useData();
+  // Las métricas se filtran por EVENTO (la noche completa), no por fecha.
+  const [eventoId, setEventoId] = useState(TODOS);
+  const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
+  const eventos = useMemo(
+    () => listarEventos({ aperturas: aperturasCaja, ventas: todasLasVentas }),
+    [aperturasCaja, todasLasVentas]
+  );
+  const eventoActual = eventos.find((e) => e.id === eventoId) || null;
   // En celulares el gráfico de barras necesita menos espacio para los nombres.
   const [movil, setMovil] = useState(() => window.innerWidth < 560);
   useEffect(() => {
@@ -86,13 +88,15 @@ export default function DashboardPage() {
     return () => window.removeEventListener("resize", alCambiar);
   }, []);
 
-  // Filtra por fechas y deja fuera las cortesías (no son venta ni se suman).
+  // Filtra por evento y deja fuera las cortesías (no son venta ni se suman).
   const ventas = useMemo(
     () =>
       todasLasVentas.filter(
-        (v) => v.formaPago !== "cortesia" && dentroDeRango(v.fecha, desde, hasta)
+        (v) =>
+          v.formaPago !== "cortesia" &&
+          (eventoId === TODOS || eventoDeRegistro(v, aperturasPorId).id === eventoId)
       ),
-    [todasLasVentas, desde, hasta]
+    [todasLasVentas, aperturasPorId, eventoId]
   );
 
   const datos = useMemo(() => {
@@ -140,27 +144,27 @@ export default function DashboardPage() {
         <div>
           <h1>Dashboard</h1>
           <p>
-            {desde || hasta
-              ? "Métricas del rango de fechas seleccionado."
+            {eventoActual
+              ? `Métricas del evento: ${eventoActual.etiqueta}.`
               : "Métricas de todo el histórico registrado."}
           </p>
         </div>
         <div className="dash__filtros">
           <label>
-            Desde
-            <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+            Evento
+            <select value={eventoActual ? eventoId : TODOS} onChange={(e) => setEventoId(e.target.value)}>
+              <option value={TODOS}>Todos los eventos</option>
+              {eventos.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.etiqueta}</option>
+              ))}
+            </select>
           </label>
-          <label>
-            Hasta
-            <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-          </label>
-          {(desde || hasta) && (
+          {eventoActual && (
             <button
               type="button"
               className="dash__limpiar"
               onClick={() => {
-                setDesde("");
-                setHasta("");
+                setEventoId(TODOS);
               }}
             >
               Quitar filtro

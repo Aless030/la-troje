@@ -133,6 +133,10 @@ export function descargarReporteCierrePDF(c) {
   y += 18;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
+  if (c.evento) {
+    doc.text(`Evento: ${c.evento}`, margen, y);
+    y += 14;
+  }
   doc.text(`Cajera: ${c.cajera || "-"}    Barra: ${c.barra || "-"}`, margen, y);
   y += 14;
   doc.text(

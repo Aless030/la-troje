@@ -27,7 +27,36 @@ const VACIO = {
   stockMinimo: "3",
   destino: "general",
   factura: "",
+  // Solo al editar: cantidad en cada ubicación.
+  stockGeneral: "",
+  stockInterior: "",
+  stockSemicubierto: "",
 };
+
+const redondear4 = (n) => Math.round(Number(n || 0) * 10000) / 10000;
+
+// Celda de stock editable en la tabla (−, número, +). Se usa para Almacén, Interior y Semicubierto.
+function CeldaStock({ valor, onCambiar }) {
+  const actual = Number(valor || 0);
+  return (
+    <div className="ajuste-stock">
+      <button type="button" onClick={() => onCambiar(Math.max(0, actual - 1))}>−</button>
+      <input
+        key={`stock-${actual}`}
+        type="number"
+        step="0.01"
+        min="0"
+        className="celda-editable celda-editable--stock"
+        defaultValue={actual.toFixed(2)}
+        onBlur={(e) => {
+          const nuevo = Math.max(0, Number(e.target.value) || 0);
+          if (nuevo !== actual) onCambiar(nuevo);
+        }}
+      />
+      <button type="button" onClick={() => onCambiar(actual + 1)}>+</button>
+    </div>
+  );
+}
 
 export default function Inventario() {
   const { productos, comprasInventario, actualizarProducto, eliminarProducto, registrarCompra, ponerStockEnCero } = useData();
@@ -35,6 +64,7 @@ export default function Inventario() {
   const [error, setError] = useState("");
   const [avisoAuto, setAvisoAuto] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  // Stock de cada ubicación al abrir la edición (para no pisar ventas hechas mientras se edita).
   const [stockOriginalEdicion, setStockOriginalEdicion] = useState(null);
   const [busqueda, setBusqueda] = useState("");
 
@@ -150,52 +180,26 @@ export default function Inventario() {
     };
 
     if (editandoId) {
-      // En edición, "Cantidad" representa el stock TOTAL del producto
-      // (almacén general + Interior + Semicubierto).
-      // Si el usuario cambia 75 a 73, se descuentan 2 unidades del stock real
-      // sin duplicar ni borrar las existencias de las barras.
+      // En edición cada ubicación (Almacén general, Interior, Semicubierto) se edita por
+      // separado. Se aplica solo la DIFERENCIA sobre el stock actual de cada una, así si se
+      // vendió algo mientras estaba abierta la edición, esa venta no se pierde.
       const productoActual = productos.find((p) => p.id === editandoId);
-      const stockGeneralActual = Number(productoActual?.stock || 0);
-      const stockInteriorActual = Number(productoActual?.stockInterior || 0);
-      const stockSemicubiertoActual = Number(productoActual?.stockSemicubierto || 0);
-      const totalAnterior =
-        stockOriginalEdicion ??
-        stockGeneralActual + stockInteriorActual + stockSemicubiertoActual;
-      const totalNuevo = Math.max(0, Number(cantidadTotal) || 0);
-      const diferencia = totalNuevo - totalAnterior;
-
-      // El ajuste se aplica al "Almacén destino" elegido en el formulario:
-      // si aumenta el total, se suma ahí; si disminuye, se descuenta primero
-      // de ese almacén y, si no alcanza, de los demás.
-      const CAMPOS = { general: "stock", interior: "stockInterior", semicubierto: "stockSemicubierto" };
-      const stocks = {
-        general: stockGeneralActual,
-        interior: stockInteriorActual,
-        semicubierto: stockSemicubiertoActual,
+      const original = stockOriginalEdicion || {
+        general: Number(productoActual?.stock || 0),
+        interior: Number(productoActual?.stockInterior || 0),
+        semicubierto: Number(productoActual?.stockSemicubierto || 0),
       };
-      const elegido = CAMPOS[form.destino] ? form.destino : "general";
-
-      if (diferencia >= 0) {
-        stocks[elegido] += diferencia;
-      } else {
-        let porDescontar = Math.abs(diferencia);
-        const orden = [elegido, ...Object.keys(stocks).filter((k) => k !== elegido)];
-        for (const k of orden) {
-          const quitar = Math.min(stocks[k], porDescontar);
-          stocks[k] -= quitar;
-          porDescontar -= quitar;
-        }
-      }
-
-      const nuevoGeneral = stocks.general;
-      const nuevoInterior = stocks.interior;
-      const nuevoSemicubierto = stocks.semicubierto;
+      const aplicar = (actual, antes, escrito) =>
+        Math.max(0, redondear4(Number(actual || 0) + (Math.max(0, Number(escrito) || 0) - antes)));
+      const nuevoGeneral = aplicar(productoActual?.stock, original.general, form.stockGeneral);
+      const nuevoInterior = aplicar(productoActual?.stockInterior, original.interior, form.stockInterior);
+      const nuevoSemicubierto = aplicar(productoActual?.stockSemicubierto, original.semicubierto, form.stockSemicubierto);
 
       await actualizarProducto(editandoId, {
         ...datos,
-        stock: Number(nuevoGeneral.toFixed(2)),
-        stockInterior: Number(nuevoInterior.toFixed(2)),
-        stockSemicubierto: Number(nuevoSemicubierto.toFixed(2)),
+        stock: nuevoGeneral,
+        stockInterior: nuevoInterior,
+        stockSemicubierto: nuevoSemicubierto,
       });
     } else {
       // Compra nueva (o reposición): se suma al almacén elegido y queda registrada con su factura.
@@ -220,7 +224,11 @@ export default function Inventario() {
       Number(p.stockSemicubierto || 0);
 
     setEditandoId(p.id);
-    setStockOriginalEdicion(stockTotal);
+    setStockOriginalEdicion({
+      general: Number(p.stock || 0),
+      interior: Number(p.stockInterior || 0),
+      semicubierto: Number(p.stockSemicubierto || 0),
+    });
     setAvisoAuto("");
     setForm({
       nombre: p.nombre || "",
@@ -241,6 +249,9 @@ export default function Inventario() {
       stockMinimo: String(p.stockMinimo ?? "3"),
       destino: "general",
       factura: "",
+      stockGeneral: String(redondear4(p.stock)),
+      stockInterior: String(redondear4(p.stockInterior)),
+      stockSemicubierto: String(redondear4(p.stockSemicubierto)),
     });
   }
 
@@ -259,9 +270,9 @@ export default function Inventario() {
     }
   }
 
-  async function ajustarStock(p, delta) {
-    const nuevo = Math.max(0, (p.stock ?? 0) + delta);
-    await actualizarProducto(p.id, { stock: nuevo });
+  // Edición directa de una ubicación desde la tabla: "stock" (almacén), "stockInterior" o "stockSemicubierto".
+  async function guardarStock(p, campo, nuevo) {
+    await actualizarProducto(p.id, { [campo]: Math.max(0, redondear4(nuevo)) });
   }
 
   const productosFiltrados = useMemo(() => {
@@ -356,15 +367,17 @@ export default function Inventario() {
 
         {esBebida && esCaja ? (
           <div className="formulario__fila">
-            <label>
-              Cantidad de cajas
-              <input
-                type="number"
-                min="0"
-                value={form.cantidadCajas}
-                onChange={(e) => actualizar("cantidadCajas", e.target.value)}
-              />
-            </label>
+            {!editandoId && (
+              <label>
+                Cantidad de cajas
+                <input
+                  type="number"
+                  min="0"
+                  value={form.cantidadCajas}
+                  onChange={(e) => actualizar("cantidadCajas", e.target.value)}
+                />
+              </label>
+            )}
             <label>
               Botellas por caja
               <input
@@ -375,16 +388,18 @@ export default function Inventario() {
                 required
               />
             </label>
-            <label>
-              Botellas sueltas (opcional, admite decimales/porcentaje ej. 0.15)
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.botellasSueltas}
-                onChange={(e) => actualizar("botellasSueltas", e.target.value)}
-              />
-            </label>
+            {!editandoId && (
+              <label>
+                Botellas sueltas (opcional, admite decimales/porcentaje ej. 0.15)
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.botellasSueltas}
+                  onChange={(e) => actualizar("botellasSueltas", e.target.value)}
+                />
+              </label>
+            )}
             <label>
               Precio de la caja (Bs)
               <input
@@ -399,16 +414,18 @@ export default function Inventario() {
           </div>
         ) : (
           <div className="formulario__fila">
-            <label>
-              Cantidad (admite decimales/porcentaje ej. 31.15)
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.cantidadBotellas}
-                onChange={(e) => actualizar("cantidadBotellas", e.target.value)}
-              />
-            </label>
+            {!editandoId && (
+              <label>
+                Cantidad (admite decimales/porcentaje ej. 31.15)
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.cantidadBotellas}
+                  onChange={(e) => actualizar("cantidadBotellas", e.target.value)}
+                />
+              </label>
+            )}
             <label>
               Precio de compra {esBebida ? "por botella" : ""} (Bs)
               <input
@@ -467,16 +484,49 @@ export default function Inventario() {
           </label>
         </div>
 
-        <div className="formulario__fila">
-          <label>
-            Almacén destino
-            <select value={form.destino} onChange={(e) => actualizar("destino", e.target.value)}>
-              {DESTINOS.map((d) => (
-                <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
-              ))}
-            </select>
-          </label>
-          {!editandoId && (
+        {editandoId ? (
+          <div className="formulario__fila">
+            <label>
+              Almacén general
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.stockGeneral}
+                onChange={(e) => actualizar("stockGeneral", e.target.value)}
+              />
+            </label>
+            <label>
+              Interior
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.stockInterior}
+                onChange={(e) => actualizar("stockInterior", e.target.value)}
+              />
+            </label>
+            <label>
+              Semicubierto
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.stockSemicubierto}
+                onChange={(e) => actualizar("stockSemicubierto", e.target.value)}
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="formulario__fila">
+            <label>
+              Almacén destino
+              <select value={form.destino} onChange={(e) => actualizar("destino", e.target.value)}>
+                {DESTINOS.map((d) => (
+                  <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
+                ))}
+              </select>
+            </label>
             <label>
               N° de factura (opcional)
               <input
@@ -485,8 +535,8 @@ export default function Inventario() {
                 placeholder="Ej: 4546"
               />
             </label>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="formulario__fila">
           {esBebida && esCaja && (
@@ -496,8 +546,20 @@ export default function Inventario() {
             </label>
           )}
           <label>
-            Cantidad total que entra
-            <input type="text" value={`${cantidadTotal} unidad(es)`} disabled />
+            {editandoId ? "Stock total (suma de las 3 ubicaciones)" : "Cantidad total que entra"}
+            <input
+              type="text"
+              value={
+                editandoId
+                  ? `${redondear4(
+                      (Number(form.stockGeneral) || 0) +
+                        (Number(form.stockInterior) || 0) +
+                        (Number(form.stockSemicubierto) || 0)
+                    )} unidad(es)`
+                  : `${cantidadTotal} unidad(es)`
+              }
+              disabled
+            />
           </label>
           <label>
             Aviso de stock bajo
@@ -555,6 +617,9 @@ export default function Inventario() {
         >
           Poner todo el stock en 0
         </button>
+        <p className="texto-vacio">
+          Puedes cambiar la cantidad de cada producto directo en la tabla, por ubicación: Almacén, Interior o Semicubierto.
+        </p>
         {productosFiltrados.length === 0 ? (
           <p className="texto-vacio">
             {productos.length === 0 ? "Todavía no cargaste productos." : "Ningún producto coincide con la búsqueda."}
@@ -604,25 +669,9 @@ export default function Inventario() {
                       }}
                     />
                   </td>
-                  <td>
-                    <div className="ajuste-stock">
-                      <button type="button" onClick={() => ajustarStock(p, -1)}>−</button>
-                      <input
-                        key={`stock-${p.id}-${p.stock}`}
-                        type="number"
-                        step="0.01"
-                        className="celda-editable celda-editable--stock"
-                        defaultValue={Number(p.stock || 0).toFixed(2)}
-                        onBlur={(e) => {
-                          const nuevo = Number(e.target.value) || 0;
-                          if (nuevo !== (p.stock ?? 0)) actualizarProducto(p.id, { stock: nuevo });
-                        }}
-                      />
-                      <button type="button" onClick={() => ajustarStock(p, 1)}>+</button>
-                    </div>
-                  </td>
-                  <td>{Number(p.stockInterior || 0).toFixed(2)}</td>
-                  <td>{Number(p.stockSemicubierto || 0).toFixed(2)}</td>
+                  <td><CeldaStock valor={p.stock} onCambiar={(n) => guardarStock(p, "stock", n)} /></td>
+                  <td><CeldaStock valor={p.stockInterior} onCambiar={(n) => guardarStock(p, "stockInterior", n)} /></td>
+                  <td><CeldaStock valor={p.stockSemicubierto} onCambiar={(n) => guardarStock(p, "stockSemicubierto", n)} /></td>
                   <td>
                     <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
                   </td>

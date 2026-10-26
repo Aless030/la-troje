@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { db, ensureAuth } from "../firebase";
 import { buscarAperturasActivas } from "../utils/Turno";
+import { normalizarNombreEvento, resolverEventoParaApertura } from "../utils/Evento";
 
 const DataContext = createContext(null);
 
@@ -285,8 +286,14 @@ export function DataProvider({ children }) {
       (a) => a.barra === apertura.barra && String(a.cajera || "").trim().toLowerCase() === nombre
     );
     if (repetida) throw new Error("Ya hay una caja abierta para esta cajera en esta barra.");
+    // El evento (la noche/fiesta) agrupa todo lo que pase en las cajas de ese evento,
+    // aunque se pase de medianoche. Las dos barras con el mismo nombre comparten evento.
+    if (!normalizarNombreEvento(apertura.evento)) throw new Error("Falta el nombre del evento.");
+    const { evento, eventoId } = resolverEventoParaApertura(apertura.evento, aperturasCaja);
     const ref = await addDoc(collection(db, "aperturasCaja"), {
       ...apertura,
+      evento,
+      eventoId,
       estado: "abierta",
       creadoEn: serverTimestamp(),
     });

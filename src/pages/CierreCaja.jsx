@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
 import { buscarAperturasActivas, cerrarTurno, construirCierre } from "../utils/Turno";
+import { eventoDeRegistro, listarEventos, mapaAperturas } from "../utils/Evento";
 
 const ETIQUETAS_DIA = {
   jueves: "Jueves",
@@ -30,6 +31,7 @@ export default function CierreCaja() {
   const [cerrando, setCerrando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [filtroDia, setFiltroDia] = useState("todos");
+  const [filtroEvento, setFiltroEvento] = useState("todos");
   // Reporte que se está mirando: el que se generó al cerrar, o uno del historial.
   const [reporteVisto, setReporteVisto] = useState(null);
 
@@ -50,9 +52,21 @@ export default function CierreCaja() {
     [aperturaActiva, ventas, gastosCaja]
   );
 
+  // El historial se puede ver por EVENTO (la noche completa) y no solo por día de la semana.
+  const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
+  const eventos = useMemo(() => listarEventos({ aperturas: aperturasCaja, cierres }), [aperturasCaja, cierres]);
+  const nombreEventoDe = (c) => {
+    const ev = eventoDeRegistro(c, aperturasPorId);
+    return eventos.find((e) => e.id === ev.id)?.etiqueta || ev.nombre;
+  };
   const historialFiltrado = useMemo(
-    () => (filtroDia === "todos" ? cierres : cierres.filter((c) => c.dia === filtroDia)),
-    [cierres, filtroDia]
+    () =>
+      cierres.filter(
+        (c) =>
+          (filtroDia === "todos" || c.dia === filtroDia) &&
+          (filtroEvento === "todos" || eventoDeRegistro(c, aperturasPorId).id === filtroEvento)
+      ),
+    [cierres, filtroDia, filtroEvento, aperturasPorId]
   );
 
   async function cerrarElTurno() {
@@ -156,6 +170,15 @@ export default function CierreCaja() {
 
         <div className="formulario__fila">
           <label>
+            Evento
+            <select value={filtroEvento} onChange={(e) => setFiltroEvento(e.target.value)}>
+              <option value="todos">Todos los eventos</option>
+              {eventos.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.etiqueta}</option>
+              ))}
+            </select>
+          </label>
+          <label>
             Ver
             <select value={filtroDia} onChange={(e) => setFiltroDia(e.target.value)}>
               <option value="todos">Todos los días</option>
@@ -173,6 +196,7 @@ export default function CierreCaja() {
           <table className="tabla">
             <thead>
               <tr>
+                <th>Evento</th>
                 <th>Fecha</th>
                 <th>Día</th>
                 <th>Cajera</th>
@@ -188,6 +212,7 @@ export default function CierreCaja() {
             <tbody>
               {historialFiltrado.map((c) => (
                 <tr key={c.id}>
+                  <td>{nombreEventoDe(c)}</td>
                   <td>{formatoFechaLarga(c.fecha)}</td>
                   <td className="tabla__etiqueta">{c.diaEtiqueta || ETIQUETAS_DIA[c.dia] || "—"}</td>
                   <td>{c.cajera || "—"}</td>

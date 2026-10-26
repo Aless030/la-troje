@@ -730,7 +730,8 @@
   color: var(--d-suave);
 }
 
-.dash__filtros input {
+.dash__filtros input,
+.dash__filtros select {
   border: 1px solid var(--d-borde);
   border-radius: 8px;
   padding: 7px 10px;
@@ -742,7 +743,8 @@
   background: #F9FAFB;
 }
 
-.dash__filtros input:focus {
+.dash__filtros input:focus,
+.dash__filtros select:focus {
   outline: 2px solid var(--dorado);
   outline-offset: 1px;
   background: #fff;

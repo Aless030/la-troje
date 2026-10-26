@@ -1,3 +1,5 @@
+import { eventoDeApertura } from "./Evento";
+
 const VENTANA_APERTURA_MS = 24 * 60 * 60 * 1000;
 
 const r2 = (n) => Math.round(Number(n || 0) * 100) / 100;
@@ -55,6 +57,7 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
   const pagadas = delTurno.filter((v) => v.formaPago !== "cortesia");
   const cortesias = delTurno.filter((v) => v.formaPago === "cortesia");
   const gastos = gastosCaja.filter((g) => g.aperturaId === apertura.id);
+  const evento = eventoDeApertura(apertura);
 
   const totalEfectivo = r2(pagadas.reduce((s, v) => s + Number(v.montoEfectivo || 0), 0));
   const totalQr = r2(pagadas.reduce((s, v) => s + Number(v.montoQr || 0), 0));
@@ -89,6 +92,8 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
     fechaApertura: apertura.fecha,
     ...diaDeFecha(apertura.fecha),
     aperturaId: apertura.id,
+    evento: evento.nombre,
+    eventoId: evento.id,
     cajera: apertura.cajera || "",
     barra: apertura.barra || "",
     meseros: apertura.meseros || [],

@@ -14,6 +14,11 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
     <section className="lista-reciente reporte-cierre">
       <h2>{titulo}</h2>
       <p className="reporte-cierre__sub">
+        {cierre.evento && (
+          <>
+            <strong>Evento:</strong> {cierre.evento} ·{" "}
+          </>
+        )}
         <strong>Cajera:</strong> {cierre.cajera || "—"} · <strong>Barra:</strong> {cierre.barra || "—"} ·{" "}
         <strong>Apertura:</strong>{" "}
         {cierre.fechaApertura ? new Date(cierre.fechaApertura).toLocaleString("es-BO") : "—"}

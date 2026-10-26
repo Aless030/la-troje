@@ -3,20 +3,12 @@ import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
 import { buscarAperturasActivas, cerrarTurno } from "../utils/Turno";
 import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/Dosiscasa";
+import {
+  eventoDeApertura, eventoDeRegistro, listarEventos, mapaAperturas, nombresEventosRecientes,
+} from "../utils/Evento";
 
 function fechaHoyISO() {
   return new Date().toISOString();
-}
-
-function esHoy(fechaIso) {
-  if (!fechaIso) return false;
-  const hoy = new Date();
-  const f = new Date(fechaIso);
-  return (
-    f.getFullYear() === hoy.getFullYear() &&
-    f.getMonth() === hoy.getMonth() &&
-    f.getDate() === hoy.getDate()
-  );
 }
 
 const BARRAS = [
@@ -53,7 +45,9 @@ export default function Ventas() {
   const [error, setError] = useState("");
   const [precioEditado, setPrecioEditado] = useState("");
   const [editandoPrecio, setEditandoPrecio] = useState(false);
-  const [aperturaForm, setAperturaForm] = useState({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
+  const [aperturaForm, setAperturaForm] = useState({ cajera: "", cajaChica: "", barra: "interior", meseros: "", evento: "" });
+  // Evento cuyas ventas se listan abajo ("" = el de la caja abierta, o el más reciente).
+  const [eventoVistaId, setEventoVistaId] = useState("");
   const [gastoForm, setGastoForm] = useState({ concepto: "", monto: "", observaciones: "" });
   const [mensajeApertura, setMensajeApertura] = useState("");
   const [mensajeGasto, setMensajeGasto] = useState("");
@@ -184,10 +178,21 @@ export default function Ventas() {
     return Array.from(nombres).sort((a, b) => a.localeCompare(b, "es"));
   }, [meserosPrevios, aperturasCaja]);
 
-  const ventasHoy = useMemo(
-    () => ventas.filter((v) => esHoy(v.fecha)).slice(0, 12),
-    [ventas]
+  // Las ventas se ven por EVENTO (la noche completa), no por fecha: así lo vendido
+  // después de medianoche sigue en el evento de la noche y no se mezcla con "hoy".
+  const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
+  const eventos = useMemo(() => listarEventos({ aperturas: aperturasCaja, ventas }), [aperturasCaja, ventas]);
+  const eventoActual = useMemo(() => (aperturaActiva ? eventoDeApertura(aperturaActiva) : null), [aperturaActiva]);
+  const nombresEventos = useMemo(() => nombresEventosRecientes(aperturasCaja), [aperturasCaja]);
+  const eventoVistaActivo =
+    eventoVistaId && eventos.some((e) => e.id === eventoVistaId)
+      ? eventoVistaId
+      : eventoActual?.id || eventos[0]?.id || "";
+  const ventasDelEvento = useMemo(
+    () => ventas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoVistaActivo),
+    [ventas, aperturasPorId, eventoVistaActivo]
   );
+  const ventasEventoRecientes = ventasDelEvento.slice(0, 20);
 
   // Siguiente N° de comanda para cada mesero, según su última venta registrada
   const siguienteComandaPorMesero = useMemo(() => {
@@ -252,17 +257,20 @@ export default function Ventas() {
     if (!cajera) return setMensajeApertura("Escribe el nombre de la persona que abre la caja.");
     if (cajaChica < 0) return setMensajeApertura("La caja chica no puede ser negativa.");
     if (meseros.length === 0) return setMensajeApertura("Escribe al menos un mesero.");
+    const evento = aperturaForm.evento.trim();
+    if (!evento) return setMensajeApertura("Escribe el nombre del evento (ej: Jueves Universitario).");
     setAbriendo(true);
     try {
       const nuevaId = await registrarAperturaCaja({
-        fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica,
+        fecha: fechaHoyISO(), cajera, barra: aperturaForm.barra, meseros, cajaChica, evento,
       });
       setReporteCierre(null);
       setProductosComanda([]);
       setForm({ ...VACIO, cajera, barra: aperturaForm.barra });
       if (nuevaId) setAperturaIdElegida(nuevaId);
       setAbriendoOtra(false);
-      setAperturaForm({ cajera: "", cajaChica: "", barra: aperturaForm.barra === "interior" ? "semicubierto" : "interior", meseros: "" });
+      // Se conserva el evento para abrir la otra barra del mismo evento sin volver a escribirlo.
+      setAperturaForm({ cajera: "", cajaChica: "", barra: aperturaForm.barra === "interior" ? "semicubierto" : "interior", meseros: "", evento });
     } catch (err) {
       console.error(err);
       setMensajeApertura(String(err?.message || "").startsWith("Ya hay") ? err.message : "No se pudo abrir la caja.");
@@ -281,6 +289,7 @@ export default function Ventas() {
     try {
       await registrarGastoCaja({
         fecha: fechaHoyISO(), aperturaId: aperturaActiva.id, barra: aperturaActiva.barra,
+        evento: eventoActual?.nombre || "", eventoId: eventoActual?.id || "",
         concepto: gastoForm.concepto.trim(), monto, observaciones: gastoForm.observaciones.trim(),
       });
       setGastoForm({ concepto: "", monto: "", observaciones: "" });
@@ -349,7 +358,7 @@ export default function Ventas() {
       setMensajeApertura("");
       setMensajeGasto("");
       setGastoForm({ concepto: "", monto: "", observaciones: "" });
-      setAperturaForm({ cajera: "", cajaChica: "", barra: "interior", meseros: "" });
+      setAperturaForm({ cajera: "", cajaChica: "", barra: "interior", meseros: "", evento: "" });
     } catch (err) {
       console.error(err);
       setError("No se pudo cerrar la caja. Intenta de nuevo.");
@@ -411,7 +420,8 @@ export default function Ventas() {
 
         await registrarVenta({
           fecha: fechaHoyISO(), cajera: aperturaActiva.cajera, comanda: form.comanda.trim(),
-          barra: aperturaActiva.barra, mesero: form.mesero.trim(), productoId: item.productoId,
+          barra: aperturaActiva.barra, evento: eventoActual?.nombre || "", eventoId: eventoActual?.id || "",
+          mesero: form.mesero.trim(), productoId: item.productoId,
           producto: item.producto, unidad: item.unidad, cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
           // En cortesía el total es 0 (no se suma a nada); el precio de la botella queda en valorCortesia solo para consulta.
@@ -474,7 +484,12 @@ export default function Ventas() {
             onClick={() => {
               // Propone la barra que todavía no tiene caja abierta.
               const libre = BARRAS.find((b) => !aperturasActivas.some((a) => a.barra === b.valor));
-              if (libre) setAperturaForm((f) => ({ ...f, barra: libre.valor }));
+              // Propone el mismo evento de la caja abierta (Interior y Semicubierto comparten evento).
+              setAperturaForm((f) => ({
+                ...f,
+                barra: libre ? libre.valor : f.barra,
+                evento: f.evento || aperturaActiva?.evento || "",
+              }));
               setAbriendoOtra((v) => !v);
             }}
           >
@@ -505,6 +520,13 @@ export default function Ventas() {
           </div>
           <div className="formulario__fila">
             <label>
+              Evento
+              <input list="eventos-apertura-lista" value={aperturaForm.evento} onChange={(e) => setAperturaForm((f) => ({ ...f, evento: e.target.value }))} placeholder="Ej: Jueves Universitario" required />
+              <datalist id="eventos-apertura-lista">{nombresEventos.map((n) => <option key={n} value={n} />)}</datalist>
+            </label>
+          </div>
+          <div className="formulario__fila">
+            <label>
               Meseros del turno
               <input list="meseros-apertura-lista" value={aperturaForm.meseros} onChange={(e) => setAperturaForm((f) => ({ ...f, meseros: e.target.value }))} placeholder="Ej: Carla, José, Luis" required />
               <datalist id="meseros-apertura-lista">{meserosAperturaPrevios.map((m) => <option key={m} value={m} />)}</datalist>
@@ -525,7 +547,7 @@ export default function Ventas() {
       ) : (
         <section className="lista-reciente">
           <h2>Caja abierta</h2>
-          <p><strong>{aperturaActiva.cajera}</strong> · Abrió: {new Date(aperturaActiva.fecha).toLocaleString("es-BO")} · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
+          <p><strong>{aperturaActiva.cajera}</strong> · Evento: <strong>{eventoActual?.nombre}</strong> · Abrió: {new Date(aperturaActiva.fecha).toLocaleString("es-BO")} · {BARRAS.find((b) => b.valor === aperturaActiva.barra)?.etiqueta || aperturaActiva.barra} · Caja chica: Bs {Number(aperturaActiva.cajaChica || 0).toFixed(2)} · Meseros: {(aperturaActiva.meseros || []).join(", ")}</p>
           <button type="button" className="boton boton--peligro" onClick={cerrarCajaDelDia} disabled={cerrandoCaja}>
             {cerrandoCaja ? "Cerrando caja…" : "Cerrar caja y ver reporte"}
           </button>
@@ -811,44 +833,63 @@ export default function Ventas() {
       )}
 
       <section className="lista-reciente">
-        <h2>Ventas de hoy</h2>
-        {ventasHoy.length === 0 ? (
-          <p className="texto-vacio">Todavía no hay ventas registradas hoy.</p>
+        <h2>Ventas del evento</h2>
+        {eventos.length > 0 && (
+          <div className="formulario__fila">
+            <label>
+              Evento
+              <select value={eventoVistaActivo} onChange={(e) => setEventoVistaId(e.target.value)}>
+                {eventos.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.etiqueta}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {ventasDelEvento.length === 0 ? (
+          <p className="texto-vacio">Todavía no hay ventas registradas en este evento.</p>
         ) : (
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th>Comanda</th>
-                <th>Hora</th>
-                <th>Barra</th>
-                <th>Mesero</th>
-                <th>Producto</th>
-                <th>Unidad</th>
-                <th>Cant.</th>
-                <th>Total</th>
-                <th>Pago</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ventasHoy.map((v) => (
-                <tr key={v.id}>
-                  <td>{v.comanda || "—"}</td>
-                  <td>{new Date(v.fecha).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" })}</td>
-                  <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
-                  <td>{v.mesero}</td>
-                  <td>{v.producto}</td>
-                  <td className="tabla__etiqueta">{v.unidad || "—"}</td>
-                  <td>{v.cantidad}</td>
-                  <td>
-                    {v.formaPago === "cortesia"
-                      ? `Cortesía (Bs ${Number(v.valorCortesia || 0).toFixed(2)})`
-                      : `Bs ${Number(v.total).toFixed(2)}`}
-                  </td>
-                  <td className="tabla__etiqueta">{v.formaPago}</td>
+          <>
+            <p className="texto-vacio">
+              {ventasDelEvento.length > ventasEventoRecientes.length
+                ? `Mostrando las ${ventasEventoRecientes.length} más recientes de ${ventasDelEvento.length} ventas del evento.`
+                : `${ventasDelEvento.length} venta${ventasDelEvento.length === 1 ? "" : "s"} en el evento.`}
+            </p>
+            <table className="tabla">
+              <thead>
+                <tr>
+                  <th>Comanda</th>
+                  <th>Fecha y hora</th>
+                  <th>Barra</th>
+                  <th>Mesero</th>
+                  <th>Producto</th>
+                  <th>Unidad</th>
+                  <th>Cant.</th>
+                  <th>Total</th>
+                  <th>Pago</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ventasEventoRecientes.map((v) => (
+                  <tr key={v.id}>
+                    <td>{v.comanda || "—"}</td>
+                    <td>{new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                    <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
+                    <td>{v.mesero}</td>
+                    <td>{v.producto}</td>
+                    <td className="tabla__etiqueta">{v.unidad || "—"}</td>
+                    <td>{v.cantidad}</td>
+                    <td>
+                      {v.formaPago === "cortesia"
+                        ? `Cortesía (Bs ${Number(v.valorCortesia || 0).toFixed(2)})`
+                        : `Bs ${Number(v.total).toFixed(2)}`}
+                    </td>
+                    <td className="tabla__etiqueta">{v.formaPago}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </section>
     </div>
