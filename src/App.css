@@ -1614,3 +1614,173 @@ input[type="time"] {
     font-size: 17px;
   }
 }
+/* =========================================================
+   PEGAR AL FINAL DE TU ARCHIVO CSS (después de todo lo que ya tienes)
+   ========================================================= */
+
+/* --- Botón Agregar producto (verde, bien visible) --- */
+.boton--agregar {
+  background: var(--verde);
+  color: #fff;
+  font-size: 15px;
+  padding: 12px 26px;
+  box-shadow: 0 4px 12px rgba(31, 122, 92, 0.35);
+}
+.boton--agregar:hover:not(:disabled) {
+  background: #17624a;
+  transform: translateY(-1px);
+}
+.boton--agregar:disabled {
+  background: #94A3B8;
+  box-shadow: none;
+}
+
+/* --- Buscador de producto --- */
+.formulario .campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.buscador { position: relative; }
+
+.buscador__boton {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  padding-right: 38px;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--texto);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.buscador__boton:focus-visible {
+  outline: none;
+  border-color: var(--dorado);
+  box-shadow: 0 0 0 3px rgba(59, 108, 212, 0.22);
+}
+.buscador__boton--vacio { color: var(--texto-suave); font-weight: 400; }
+.buscador__texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.buscador__boton--vacio .buscador__texto { font-weight: 400; }
+.buscador__flecha { position: absolute; right: 12px; color: var(--texto-suave); }
+
+.buscador__limpiar {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--texto-suave);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.buscador__limpiar:hover { background: var(--crema); color: var(--rojo); }
+
+.buscador__fondo { position: fixed; inset: 0; z-index: 49; }
+
+.buscador__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 300px;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(30, 41, 59, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.buscador__cabecera {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--borde);
+  background: var(--crema);
+}
+.buscador__cabecera input { flex: 1; min-width: 0; }
+.buscador__cerrar {
+  display: none;
+  border: none;
+  background: none;
+  color: var(--dorado);
+  font: inherit;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.buscador__lista {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.buscador__grupo {
+  position: sticky;
+  top: 0;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+  background: #F8FAFC;
+}
+.buscador__opcion {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--texto);
+  cursor: pointer;
+}
+.buscador__opcion--activa { background: var(--dorado-suave); }
+.buscador__opcion:disabled { opacity: 0.5; cursor: not-allowed; }
+.buscador__nombre { font-weight: 600; }
+.buscador__detalle { font-size: 12.5px; color: var(--verde); white-space: nowrap; font-weight: 600; }
+.buscador__detalle--agotado { color: var(--rojo); }
+.buscador__vacio { padding: 18px 14px; text-align: center; color: var(--texto-suave); }
+
+/* Celular: el buscador se abre a pantalla completa */
+@media (max-width: 860px) {
+  .buscador__fondo { background: rgba(0, 0, 0, 0.45); z-index: 59; }
+  .buscador__panel {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+  }
+  .buscador__cabecera { padding: 12px; }
+  .buscador__cabecera input { min-height: 46px; }
+  .buscador__cerrar { display: block; }
+  .buscador__lista { flex: 1; max-height: none; padding-bottom: 24px; }
+  .buscador__opcion { min-height: 56px; padding: 12px 16px; font-size: 16px; }
+  .buscador__boton { min-height: 46px; font-size: 16px; }
+}

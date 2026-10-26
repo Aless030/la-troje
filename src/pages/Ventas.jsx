@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
 import { buscarAperturasActivas, cerrarTurno } from "../utils/Turno";
@@ -34,6 +34,166 @@ const VACIO = {
   observaciones: "",
   complemento: "",
 };
+
+// Quita tildes y mayúsculas: "Ron Añejo" se encuentra escribiendo "anejo".
+const norm = (s) =>
+  String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/* =========================================================
+   BUSCADOR DE PRODUCTO (computadora: desplegable / celular: pantalla completa)
+   ========================================================= */
+function BuscadorProducto({
+  opciones, // [{ valor, nombre, grupo, detalle, deshabilitado }]
+  valor,
+  onChange, // recibe el valor elegido ("" para limpiar)
+  placeholder = "Toca para buscar un producto…",
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [q, setQ] = useState("");
+  const [indice, setIndice] = useState(0);
+  const inputRef = useRef(null);
+  const listaRef = useRef(null);
+
+  const seleccionada = opciones.find((o) => o.valor === valor);
+
+  const filtradas = useMemo(() => {
+    const palabras = norm(q).split(/\s+/).filter(Boolean);
+    return opciones.filter((o) => palabras.every((w) => norm(o.nombre).includes(w)));
+  }, [opciones, q]);
+
+  const habilitadas = useMemo(() => filtradas.filter((o) => !o.deshabilitado), [filtradas]);
+  const activo = habilitadas[indice]?.valor;
+
+  // Al abrir: enfoca el buscador y (en celular) bloquea el scroll de fondo.
+  useEffect(() => {
+    if (!abierto) return;
+    inputRef.current?.focus();
+    const movil = window.matchMedia("(max-width: 860px)").matches;
+    const previo = document.body.style.overflow;
+    if (movil) document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previo;
+    };
+  }, [abierto]);
+
+  // Mantiene visible la opción marcada con el teclado.
+  useEffect(() => {
+    listaRef.current?.querySelector('[data-activo="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [indice, filtradas]);
+
+  function abrir() {
+    setQ("");
+    setIndice(0);
+    setAbierto(true);
+  }
+
+  function cerrar() {
+    setAbierto(false);
+  }
+
+  function elegir(o) {
+    if (o.deshabilitado) return;
+    onChange(o.valor);
+    cerrar();
+  }
+
+  function teclas(e) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIndice((i) => Math.min(i + 1, habilitadas.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIndice((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault(); // evita enviar el formulario de venta
+      if (habilitadas[indice]) elegir(habilitadas[indice]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cerrar();
+    }
+  }
+
+  let grupoAnterior = null;
+
+  return (
+    <div className="buscador">
+      <button
+        type="button"
+        className={`buscador__boton ${seleccionada ? "" : "buscador__boton--vacio"}`}
+        onClick={abrir}
+      >
+        <span className="buscador__texto">{seleccionada ? seleccionada.nombre : placeholder}</span>
+        {!seleccionada && <span className="buscador__flecha">▾</span>}
+      </button>
+      {seleccionada && (
+        <button type="button" className="buscador__limpiar" onClick={() => onChange("")} aria-label="Quitar selección">
+          ✕
+        </button>
+      )}
+
+      {abierto && (
+        <>
+          <div className="buscador__fondo" onClick={cerrar} />
+          <div className="buscador__panel">
+            <div className="buscador__cabecera">
+              <input
+                ref={inputRef}
+                type="search"
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setIndice(0);
+                }}
+                onKeyDown={teclas}
+                placeholder="Escribe para buscar…"
+                autoComplete="off"
+                enterKeyHint="done"
+              />
+              <button type="button" className="buscador__cerrar" onClick={cerrar}>
+                Cancelar
+              </button>
+            </div>
+
+            <ul className="buscador__lista" role="listbox" ref={listaRef}>
+              {filtradas.length === 0 && (
+                <li className="buscador__vacio">Sin resultados para “{q}”</li>
+              )}
+              {filtradas.map((o) => {
+                const cabecera = o.grupo !== grupoAnterior ? o.grupo : null;
+                grupoAnterior = o.grupo;
+                return (
+                  <li key={o.valor} role="presentation">
+                    {cabecera && <div className="buscador__grupo">{cabecera}</div>}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={o.valor === valor}
+                      data-activo={o.valor === activo}
+                      disabled={o.deshabilitado}
+                      className={`buscador__opcion ${o.valor === activo ? "buscador__opcion--activa" : ""}`}
+                      onClick={() => elegir(o)}
+                      onMouseEnter={() => {
+                        const i = habilitadas.findIndex((h) => h.valor === o.valor);
+                        if (i >= 0) setIndice(i);
+                      }}
+                    >
+                      <span className="buscador__nombre">{o.nombre}</span>
+                      <span
+                        className={`buscador__detalle ${o.deshabilitado ? "buscador__detalle--agotado" : ""}`}
+                      >
+                        {o.detalle}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function Ventas() {
   const {
@@ -124,6 +284,31 @@ export default function Ventas() {
     const falta = consumo.find((c) => Number(productos.find((x) => x.id === c.productoId)?.[campoActivo] || 0) + 1e-9 < c.cantidad);
     return falta ? `falta ${productos.find((x) => x.id === falta.productoId)?.nombre || "insumo"} en esta barra` : "";
   }
+
+  // Opciones que ve el buscador (productos + tragos de Recetario).
+  const opcionesBuscador = useMemo(
+    () => [
+      ...productos.map((p) => {
+        const s = Number(p[campoActivo] ?? 0);
+        return {
+          valor: p.id,
+          nombre: p.nombre,
+          grupo: "Productos",
+          detalle: s <= 0 ? "sin stock aquí" : `stock: ${formatearStock(s)}`,
+          deshabilitado: s <= 0,
+        };
+      }),
+      ...tragosLista.map(({ receta, disponibles }) => ({
+        valor: `receta:${receta.id}`,
+        nombre: receta.nombre,
+        grupo: "Tragos",
+        detalle: disponibles <= 0 ? faltanteDeTrago(receta) || "sin insumos aquí" : `alcanza para: ${disponibles}`,
+        deshabilitado: disponibles <= 0,
+      })),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [productos, tragosLista, campoActivo]
+  );
 
   // Qué productos del inventario gasta una línea de la comanda (un trago gasta
   // cada ingrediente de su receta, en fracciones de botella).
@@ -222,6 +407,18 @@ export default function Ventas() {
 
   function cambiarUnidad(unidad) {
     setForm((f) => ({ ...f, unidad }));
+    setEditandoPrecio(false);
+    setPrecioEditado("");
+  }
+
+  // Se llama desde el buscador al elegir un producto o trago.
+  function elegirProducto(id) {
+    const elegido = productos.find((p) => p.id === id);
+    setForm((f) => ({
+      ...f,
+      productoId: id,
+      unidad: elegido?.unidadVenta === "Vaso" ? "Vaso" : "Botella",
+    }));
     setEditandoPrecio(false);
     setPrecioEditado("");
   }
@@ -609,41 +806,14 @@ export default function Ventas() {
         </div>
 
         <div className="formulario__fila">
-          <label>
-            Producto
-            <select
-              value={form.productoId}
-              onChange={(e) => {
-                const elegido = productos.find((p) => p.id === e.target.value);
-                setForm((f) => ({
-                  ...f,
-                  productoId: e.target.value,
-                  unidad: elegido?.unidadVenta === "Vaso" ? "Vaso" : "Botella",
-                }));
-                setEditandoPrecio(false);
-                setPrecioEditado("");
-              }}
-              
-            >
-              <option value="">Selecciona un producto…</option>
-              <optgroup label="Productos">
-                {productos.map((p) => (
-                  <option key={p.id} value={p.id} disabled={(p[campoActivo] ?? 0) <= 0}>
-                    {p.nombre} {(p[campoActivo] ?? 0) <= 0 ? "(sin stock aquí)" : `— stock: ${formatearStock(p[campoActivo])}`}
-                  </option>
-                ))}
-              </optgroup>
-              {tragosLista.length > 0 && (
-                <optgroup label="Tragos (Recetario)">
-                  {tragosLista.map(({ receta, disponibles }) => (
-                    <option key={receta.id} value={`receta:${receta.id}`} disabled={disponibles <= 0}>
-                      {receta.nombre} {disponibles <= 0 ? `(${faltanteDeTrago(receta) || "sin insumos aquí"})` : `— alcanza para: ${disponibles}`}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </label>
+          <div className="campo">
+            <span>Producto</span>
+            <BuscadorProducto
+              opciones={opcionesBuscador}
+              valor={form.productoId}
+              onChange={elegirProducto}
+            />
+          </div>
           <label>
             Unidad
             <select
@@ -709,8 +879,8 @@ export default function Ventas() {
         )}
 
         <div className="formulario__acciones">
-          <button type="button" className="boton boton--fantasma" onClick={agregarProductoComanda} disabled={!itemSel}>
-            Agregar producto
+          <button type="button" className="boton boton--agregar" onClick={agregarProductoComanda} disabled={!itemSel}>
+            + Agregar producto
           </button>
           <span>{productosComanda.length} producto{productosComanda.length === 1 ? "" : "s"} agregado{productosComanda.length === 1 ? "" : "s"}</span>
         </div>
