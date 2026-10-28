@@ -22,7 +22,7 @@ export const ROLES = {
   },
   administrador: {
     etiqueta: "Administrador",
-    vistas: ["menu", "reportes", "dashboard"],
+    vistas: ["menu", "ventas", "reportes", "dashboard", "movimientos"],
   },
   socio_aux: {
     etiqueta: "Socio auxiliar (solo ver)",
@@ -57,4 +57,9 @@ export function esSoloLectura(rol) {
 export function vistaInicial(rol) {
   const v = vistasDe(rol);
   return v.includes("menu") ? "menu" : v[0] || "menu";
+}
+
+// Solo el administrador (y el socio principal, dueño con acceso total) puede anular comandas.
+export function puedeAnular(rol) {
+  return rol === "administrador" || rol === "socio_main";
 }

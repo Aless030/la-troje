@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { puedeAnular } from "../utils/permisos";
 import ReporteCierre from "../components/ReporteTurno";
 import { buscarAperturasActivas, cerrarTurno } from "../utils/Turno";
 import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDisponibles } from "../utils/Dosiscasa";
@@ -197,9 +199,12 @@ function BuscadorProducto({
 
 export default function Ventas() {
   const {
-    productos, recetas, ventas, aperturasCaja, gastosCaja,
-    registrarVenta, registrarAperturaCaja, registrarGastoCaja, registrarCierre, cerrarAperturaCaja
+    productos, recetas, ventas, ventasTodas, aperturasCaja, gastosCaja,
+    registrarVenta, anularVentas, registrarAperturaCaja, registrarGastoCaja, registrarCierre, cerrarAperturaCaja
   } = useData();
+  const { perfil } = useAuth();
+  const puedeAnularVentas = puedeAnular(perfil?.rol);
+  const [anulando, setAnulando] = useState("");
   const [form, setForm] = useState(VACIO);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
@@ -366,7 +371,7 @@ export default function Ventas() {
   // Las ventas se ven por EVENTO (la noche completa), no por fecha: así lo vendido
   // después de medianoche sigue en el evento de la noche y no se mezcla con "hoy".
   const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
-  const eventos = useMemo(() => listarEventos({ aperturas: aperturasCaja, ventas }), [aperturasCaja, ventas]);
+  const eventos = useMemo(() => listarEventos({ aperturas: aperturasCaja, ventas: ventasTodas }), [aperturasCaja, ventasTodas]);
   const eventoActual = useMemo(() => (aperturaActiva ? eventoDeApertura(aperturaActiva) : null), [aperturaActiva]);
   const nombresEventos = useMemo(() => nombresEventosRecientes(aperturasCaja), [aperturasCaja]);
   const eventoVistaActivo =
@@ -374,15 +379,15 @@ export default function Ventas() {
       ? eventoVistaId
       : eventoActual?.id || eventos[0]?.id || "";
   const ventasDelEvento = useMemo(
-    () => ventas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoVistaActivo),
-    [ventas, aperturasPorId, eventoVistaActivo]
+    () => ventasTodas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoVistaActivo),
+    [ventasTodas, aperturasPorId, eventoVistaActivo]
   );
   const ventasEventoRecientes = ventasDelEvento.slice(0, 20);
 
   // Siguiente N° de comanda para cada mesero, según su última venta registrada
   const siguienteComandaPorMesero = useMemo(() => {
     const ultimo = {};
-    ventas.forEach((v) => {
+    ventasTodas.forEach((v) => {
       if (!v.mesero) return;
       const n = Number(v.comanda);
       if (!Number.isFinite(n)) return;
@@ -395,7 +400,31 @@ export default function Ventas() {
       sig[m] = String(n + 1);
     });
     return sig;
-  }, [ventas]);
+  }, [ventasTodas]);
+
+  // Anula TODA la comanda (todas sus líneas). Solo administrador.
+  async function anularComanda(v) {
+    if (!puedeAnularVentas) return;
+    const lineas = ventasTodas.filter(
+      (x) =>
+        !x.anulada &&
+        x.comanda === v.comanda &&
+        (x.mesero || "") === (v.mesero || "") &&
+        (x.aperturaId || "") === (v.aperturaId || "")
+    );
+    const total = lineas.reduce((s, x) => s + Number(x.total || 0), 0);
+    if (!window.confirm(`¿Anular la comanda ${v.comanda || "(sin número)"} de ${v.mesero || "—"}?\n${lineas.length} producto(s), Bs ${total.toFixed(2)}.\nSe devolverá el stock al inventario.`)) return;
+    const motivo = window.prompt("Motivo de la anulación (opcional):", "") ?? "";
+    setAnulando(v.id);
+    try {
+      await anularVentas(lineas, { motivo: motivo.trim(), por: perfil?.nombre || perfil?.usuario || "" });
+    } catch (err) {
+      console.error(err);
+      window.alert("No se pudo anular la comanda. Intenta de nuevo.");
+    } finally {
+      setAnulando("");
+    }
+  }
 
   function cambiarMesero(mesero) {
     setForm((f) => ({ ...f, mesero, comanda: siguienteComandaPorMesero[mesero] || "" }));
@@ -1037,11 +1066,12 @@ export default function Ventas() {
                   <th>Cant.</th>
                   <th>Total</th>
                   <th>Pago</th>
+                  {puedeAnularVentas && <th>Anular</th>}
                 </tr>
               </thead>
               <tbody>
                 {ventasEventoRecientes.map((v) => (
-                  <tr key={v.id}>
+                  <tr key={v.id} style={v.anulada ? { textDecoration: "line-through", opacity: 0.5 } : undefined}>
                     <td>{v.comanda || "—"}</td>
                     <td>{new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                     <td className="tabla__etiqueta">{BARRAS.find((b) => b.valor === v.barra)?.etiqueta || "—"}</td>
@@ -1054,7 +1084,23 @@ export default function Ventas() {
                         ? `Cortesía (Bs ${Number(v.valorCortesia || 0).toFixed(2)})`
                         : `Bs ${Number(v.total).toFixed(2)}`}
                     </td>
-                    <td className="tabla__etiqueta">{v.formaPago}</td>
+                    <td className="tabla__etiqueta">{v.anulada ? "ANULADA" : v.formaPago}</td>
+                    {puedeAnularVentas && (
+                      <td style={{ textDecoration: "none" }}>
+                        {v.anulada ? (
+                          <span title={v.motivoAnulacion || ""}>{v.anuladaPor || "—"}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="boton boton--enlace boton--peligro"
+                            disabled={anulando === v.id}
+                            onClick={() => anularComanda(v)}
+                          >
+                            {anulando === v.id ? "Anulando…" : "Anular comanda"}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

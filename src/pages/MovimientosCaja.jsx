@@ -12,7 +12,7 @@ const TIPOS = [
 const VACIO = { tipo: "sueldo", descripcion: "", numeroFactura: "", monto: "" };
 
 export default function MovimientosCaja() {
-  const { movimientos, registrarMovimiento } = useData();
+  const { movimientos, registrarMovimiento, ventas, gastos, gastosCaja } = useData();
   const [form, setForm] = useState(VACIO);
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -54,6 +54,20 @@ export default function MovimientosCaja() {
     return { porTipo, total };
   }, [movimientos]);
 
+  // Todo lo vendido (de cualquier evento, sin anuladas ni cortesías) menos todas las salidas:
+  // movimientos (sueldos, proveedores, facturas), gastos semanales y gastos de caja.
+  const resumen = useMemo(() => {
+    const suma = (lista, campo) => lista.reduce((a, x) => a + Number(x[campo] || 0), 0);
+    const ventasTotales = suma(ventas, "total");
+    const ventasQr = suma(ventas, "montoQr");
+    const ventasEfectivo = suma(ventas, "montoEfectivo");
+    const movs = totales.total;
+    const gastosSemanales = suma(gastos, "monto");
+    const gastosDeCaja = suma(gastosCaja, "monto");
+    const salidas = movs + gastosSemanales + gastosDeCaja;
+    return { ventasTotales, ventasQr, ventasEfectivo, movs, gastosSemanales, gastosDeCaja, salidas, saldo: ventasTotales - salidas };
+  }, [ventas, gastos, gastosCaja, totales]);
+
   function exportarCSV() {
     descargarCSV(
       "movimientos-caja",
@@ -76,8 +90,39 @@ export default function MovimientosCaja() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Movimientos de caja</h1>
-        <p>Registra sueldos, pagos a proveedores y facturas.</p>
+        <p>Ventas totales generadas y, de ahí, lo que se paga: sueldos, proveedores y facturas.</p>
       </header>
+
+      <div className="tarjetas-resumen">
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">Ventas totales (todos los eventos)</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.ventasTotales.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">Efectivo</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.ventasEfectivo.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">QR</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.ventasQr.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">− Movimientos (sueldos, proveedores…)</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.movs.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">− Gastos semanales</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.gastosSemanales.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica">
+          <span className="tarjeta-metrica__etiqueta">− Gastos de caja</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.gastosDeCaja.toFixed(2)}</span>
+        </div>
+        <div className="tarjeta-metrica tarjeta-metrica--destacada">
+          <span className="tarjeta-metrica__etiqueta">Saldo disponible</span>
+          <span className="tarjeta-metrica__valor">Bs {resumen.saldo.toFixed(2)}</span>
+        </div>
+      </div>
 
       <form className="formulario" onSubmit={enviar}>
         <div className="formulario__fila">

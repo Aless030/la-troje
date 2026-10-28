@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
@@ -50,7 +50,10 @@ export function DataProvider({ children }) {
   }, []);
 
   const [productos, productosListos] = useColeccion("productos", "nombre");
-  const [ventas, ventasListas] = useColeccion("ventas");
+  const [ventasTodas, ventasListas] = useColeccion("ventas");
+  // "ventas" excluye las anuladas: así reportes, dashboard, cierres y movimientos
+  // dejan de contarlas solos. "ventasTodas" las incluye (para mostrarlas tachadas).
+  const ventas = useMemo(() => ventasTodas.filter((v) => !v.anulada), [ventasTodas]);
   const [cierres, cierresListos] = useColeccion("cierres");
   const [movimientos, movimientosListos] = useColeccion("movimientos");
   const [ingresos, ingresosListos] = useColeccion("ingresos");
@@ -148,6 +151,59 @@ export function DataProvider({ children }) {
         ? venta.consumo
         : [{ productoId: venta.productoId, cantidad: venta.cantidad }];
     await descontarStock(consumos, venta.barra);
+  }
+
+  // Anula una o varias ventas (las líneas de una comanda): quedan marcadas como
+  // anuladas (no se borran) y se devuelve al inventario lo que se había descontado.
+  async function anularVentas(lista, { motivo, por }) {
+    if (!lista || lista.length === 0) return 0;
+    let anuladas = 0;
+    await runTransaction(db, async (tx) => {
+      anuladas = 0;
+      const vRefs = lista.map((v) => doc(db, "ventas", v.id));
+      const vSnaps = await Promise.all(vRefs.map((r) => tx.get(r)));
+      const devolver = {}; // "productoId|campo" -> cantidad
+      const validas = [];
+      vSnaps.forEach((snap, i) => {
+        if (!snap.exists() || snap.data().anulada) return;
+        validas.push(vRefs[i]);
+        const v = snap.data();
+        const campo =
+          v.barra === "interior" ? "stockInterior" : v.barra === "semicubierto" ? "stockSemicubierto" : "stock";
+        const consumos =
+          Array.isArray(v.consumo) && v.consumo.length > 0
+            ? v.consumo
+            : [{ productoId: v.productoId, cantidad: v.cantidad }];
+        consumos.forEach((c) => {
+          if (!c.productoId) return;
+          const k = `${c.productoId}|${campo}`;
+          devolver[k] = (devolver[k] || 0) + Number(c.cantidad || 0);
+        });
+      });
+      const ids = [...new Set(Object.keys(devolver).map((k) => k.split("|")[0]))];
+      const pRefs = ids.map((id) => doc(db, "productos", id));
+      const pSnaps = await Promise.all(pRefs.map((r) => tx.get(r)));
+      pSnaps.forEach((snap, i) => {
+        if (!snap.exists()) return;
+        const cambios = {};
+        Object.entries(devolver).forEach(([k, cant]) => {
+          const [pid, campo] = k.split("|");
+          if (pid !== ids[i]) return;
+          cambios[campo] = Math.round((Number(snap.data()[campo] || 0) + cant) * 10000) / 10000;
+        });
+        tx.update(pRefs[i], cambios);
+      });
+      validas.forEach((ref) =>
+        tx.update(ref, {
+          anulada: true,
+          anuladaPor: por || "",
+          anuladaEn: new Date().toISOString(),
+          motivoAnulacion: motivo || "",
+        })
+      );
+      anuladas = validas.length;
+    });
+    return anuladas;
   }
 
   // Un cierre por apertura: el id es fijo, así un reintento no crea un reporte duplicado.
@@ -347,6 +403,7 @@ export function DataProvider({ children }) {
     listo: todoListo,
     productos,
     ventas,
+    ventasTodas,
     cierres,
     movimientos,
     ingresos,
@@ -362,6 +419,7 @@ export function DataProvider({ children }) {
     eliminarProducto,
     ponerStockEnCero,
     registrarVenta,
+    anularVentas,
     registrarCierre,
     eliminarCierre,
     limpiarCierresAntiguos,
