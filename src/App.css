@@ -2005,3 +2005,55 @@ input[type="time"] {
     font-size: 30px;
   }
 }
+/* --- Movimientos de caja: balance ingresos − salidas = saldo --- */
+.mov-balance {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 28px;
+}
+.mov-balance__col, .mov-balance__saldo {
+  background: var(--crema-panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 16px 18px;
+}
+.mov-balance__col h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+.mov-balance__col--entra { border-top: 4px solid var(--verde); }
+.mov-balance__col--entra h2 { color: var(--verde); }
+.mov-balance__col--sale { border-top: 4px solid var(--rojo); }
+.mov-balance__col--sale h2 { color: var(--rojo); }
+.mov-fila { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13.5px; color: var(--texto-suave); border-bottom: 1px dashed var(--borde); }
+.mov-fila strong { color: var(--texto); white-space: nowrap; }
+.mov-fila--total { border-bottom: 0; border-top: 2px solid var(--borde); margin-top: 6px; padding-top: 10px; color: var(--texto); font-weight: 600; }
+.mov-fila--total strong { font-size: 17px; font-family: "Fraunces", serif; }
+.mov-balance__signo { align-self: center; font-size: 30px; font-weight: 600; color: var(--texto-suave); }
+.mov-balance__saldo { background: var(--marron-oscuro); border-color: var(--marron-oscuro); display: flex; flex-direction: column; justify-content: center; gap: 6px; color: var(--dorado-suave); }
+.mov-balance__saldo span { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.mov-balance__saldo strong { font-family: "Fraunces", serif; font-size: 30px; color: #fff; }
+.mov-balance__saldo--negativo strong { color: #FF9AA8; }
+.mov-balance__saldo small { opacity: 0.8; }
+.mov-balance__saldo em { font-style: normal; font-size: 12px; margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); }
+@media (max-width: 900px) {
+  .mov-balance { grid-template-columns: 1fr; }
+  .mov-balance__signo { text-align: center; line-height: 1; }
+}
+.mov-filtros { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.mov-filtros .buscador__input { flex: 1 1 260px; }
+.mov-filtros select { padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; }
+.mov-fecha { white-space: nowrap; }
+.mov-fecha strong { display: block; font-weight: 600; color: var(--texto); }
+.mov-fecha span { font-size: 12px; color: var(--texto-suave); }
+.mov-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; background: #EEF2F7; color: var(--marron-medio); }
+.mov-chip--ingreso { background: #DCF1E9; color: var(--verde); }
+.mov-chip--sueldo { background: #DBE5F7; color: #2A55AC; }
+.mov-chip--proveedor { background: #FCEBD3; color: #9A5B0B; }
+.mov-chip--factura { background: #EADFF5; color: #6A3E95; }
+.mov-monto { text-align: right; white-space: nowrap; font-weight: 600; }
+.mov-monto--entra { color: var(--verde); }
+.mov-monto--sale { color: var(--rojo); }
+.mov-estado { border-radius: 999px; padding: 3px 8px; border: 1px solid var(--borde); font-weight: 600; font-size: 12.5px; }
+.mov-estado--deuda { background: #FBE3E6; color: var(--rojo); border-color: #F0C2C9; }
+.mov-estado--pagado { background: #DCF1E9; color: var(--verde); border-color: #B7E0D1; }

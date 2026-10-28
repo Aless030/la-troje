@@ -16,12 +16,34 @@ const PLURAL = { sueldo: "Sueldos", proveedor: "Proveedores", factura: "Facturas
 // viejos de proveedor (sin estado) se consideran pagados.
 const estadoDe = (m) => (m.tipo === "proveedor" ? m.estado || "pagado" : null);
 
-const VACIO = { tipo: "sueldo", descripcion: "", numeroFactura: "", monto: "", estado: "deuda" };
+const hoyLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const nuevoForm = () => ({ tipo: "sueldo", fecha: hoyLocal(), descripcion: "", numeroFactura: "", monto: "", estado: "deuda" });
+
+// Si la fecha elegida es hoy se guarda con la hora actual; si es otro día, al mediodía.
+const fechaAISO = (yyyyMmDd) => {
+  if (!yyyyMmDd || yyyyMmDd === hoyLocal()) return new Date().toISOString();
+  return new Date(`${yyyyMmDd}T12:00:00`).toISOString();
+};
+
+const fmtFecha = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d)) return { dia: "—", hora: "" };
+  return {
+    dia: d.toLocaleDateString("es-BO", { day: "2-digit", month: "short", year: "numeric" }),
+    hora: d.toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }),
+  };
+};
+
+const bs = (n) => `Bs ${Number(n || 0).toLocaleString("es-BO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function MovimientosCaja() {
   const { movimientos, registrarMovimiento, actualizarMovimiento, ventas, gastos, gastosCaja } = useData();
   const [busqueda, setBusqueda] = useState("");
-  const [form, setForm] = useState(VACIO);
+  const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [form, setForm] = useState(nuevoForm);
   const [error, setError] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -38,14 +60,14 @@ export default function MovimientosCaja() {
     setEnviando(true);
     try {
       await registrarMovimiento({
-        fecha: new Date().toISOString(),
+        fecha: fechaAISO(form.fecha),
         tipo: form.tipo,
         descripcion: form.descripcion.trim(),
         numeroFactura: form.numeroFactura.trim(),
         monto: Number(form.monto),
         ...(form.tipo === "proveedor" ? { estado: form.estado } : {}),
       });
-      setForm(VACIO);
+      setForm(nuevoForm());
     } catch (err) {
       console.error(err);
       setError("No se pudo registrar el movimiento.");
@@ -77,15 +99,19 @@ export default function MovimientosCaja() {
     }
   }
 
+  // Más recientes primero; se puede filtrar por tipo y buscar por texto.
   const movimientosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return movimientos;
-    return movimientos.filter((m) =>
-      [m.descripcion, m.numeroFactura, m.tipo, estadoDe(m), String(m.monto)]
-        .filter(Boolean)
-        .some((c) => String(c).toLowerCase().includes(q))
-    );
-  }, [movimientos, busqueda]);
+    return [...movimientos]
+      .filter((m) => filtroTipo === "todos" || m.tipo === filtroTipo)
+      .filter((m) =>
+        !q ||
+        [m.descripcion, m.numeroFactura, m.tipo, estadoDe(m), String(m.monto)]
+          .filter(Boolean)
+          .some((c) => String(c).toLowerCase().includes(q))
+      )
+      .sort((a, b) => (new Date(b.fecha).getTime() || 0) - (new Date(a.fecha).getTime() || 0));
+  }, [movimientos, busqueda, filtroTipo]);
 
   // Todo lo vendido (de cualquier evento, sin anuladas ni cortesías) menos todas las salidas:
   // movimientos (sueldos, proveedores, facturas), gastos semanales y gastos de caja.
@@ -99,7 +125,8 @@ export default function MovimientosCaja() {
     const gastosDeCaja = suma(gastosCaja, "monto");
     const ingresosExtra = totales.ingresos;
     const salidas = movs + gastosSemanales + gastosDeCaja;
-    return { ventasTotales, ventasQr, ventasEfectivo, movs, ingresosExtra, gastosSemanales, gastosDeCaja, salidas, saldo: ventasTotales + ingresosExtra - salidas };
+    const entradas = ventasTotales + ingresosExtra;
+    return { ventasTotales, ventasQr, ventasEfectivo, movs, ingresosExtra, gastosSemanales, gastosDeCaja, entradas, salidas, saldo: entradas - salidas };
   }, [ventas, gastos, gastosCaja, totales]);
 
   function exportarCSV() {
@@ -107,66 +134,66 @@ export default function MovimientosCaja() {
       "movimientos-caja",
       [
         { titulo: "Fecha", clave: "fechaTexto" },
+        { titulo: "Hora", clave: "horaTexto" },
         { titulo: "Tipo", clave: "tipo" },
         { titulo: "Descripción", clave: "descripcion" },
         { titulo: "N° Factura", clave: "numeroFactura" },
         { titulo: "Monto", clave: "monto" },
         { titulo: "Estado", clave: "estadoTexto" },
       ],
-      movimientos.map((m) => ({
+      movimientosFiltrados.map((m) => ({
         ...m,
-        fechaTexto: new Date(m.fecha).toLocaleDateString("es-BO"),
+        fechaTexto: fmtFecha(m.fecha).dia,
+        horaTexto: fmtFecha(m.fecha).hora,
         monto: Number(m.monto).toFixed(2),
         estadoTexto: estadoDe(m) || "",
       }))
     );
   }
 
+  const fila = (etiqueta, valor, extra = "") => (
+    <div className={`mov-fila ${extra}`}>
+      <span>{etiqueta}</span>
+      <strong>{valor}</strong>
+    </div>
+  );
+
   return (
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Movimientos de caja</h1>
-        <p>Ventas totales generadas y, de ahí, lo que se paga: sueldos, proveedores y facturas.</p>
+        <p>Lo que entró, lo que salió y lo que queda en caja.</p>
       </header>
 
-      <div className="tarjetas-resumen">
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Ventas totales (todos los eventos)</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.ventasTotales.toFixed(2)}</span>
+      <section className="mov-balance">
+        <div className="mov-balance__col mov-balance__col--entra">
+          <h2>Ingresos</h2>
+          {fila("Ventas en efectivo", bs(resumen.ventasEfectivo))}
+          {fila("Ventas por QR", bs(resumen.ventasQr))}
+          {resumen.ingresosExtra > 0 && fila("Otros ingresos registrados", bs(resumen.ingresosExtra))}
+          {fila("Total ingresos", bs(resumen.entradas), "mov-fila--total")}
         </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">Efectivo</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.ventasEfectivo.toFixed(2)}</span>
+        <div className="mov-balance__signo">−</div>
+        <div className="mov-balance__col mov-balance__col--sale">
+          <h2>Salidas</h2>
+          {fila("Sueldos, proveedores y facturas pagados", bs(resumen.movs))}
+          {fila("Gastos semanales", bs(resumen.gastosSemanales))}
+          {fila("Gastos de caja", bs(resumen.gastosDeCaja))}
+          {fila("Total salidas", bs(resumen.salidas), "mov-fila--total")}
         </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">QR</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.ventasQr.toFixed(2)}</span>
+        <div className="mov-balance__signo">=</div>
+        <div className={`mov-balance__saldo ${resumen.saldo < 0 ? "mov-balance__saldo--negativo" : ""}`}>
+          <span>Saldo en caja</span>
+          <strong>{bs(resumen.saldo)}</strong>
+          <small>Ingresos − salidas</small>
+          {totales.deuda > 0 && (
+            <em>Deuda pendiente con proveedores: {bs(totales.deuda)} (aún no resta)</em>
+          )}
         </div>
-        {resumen.ingresosExtra > 0 && (
-          <div className="tarjeta-metrica">
-            <span className="tarjeta-metrica__etiqueta">+ Ingresos registrados</span>
-            <span className="tarjeta-metrica__valor">Bs {resumen.ingresosExtra.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">− Movimientos pagados (sueldos, proveedores…)</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.movs.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">− Gastos semanales</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.gastosSemanales.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica">
-          <span className="tarjeta-metrica__etiqueta">− Gastos de caja</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.gastosDeCaja.toFixed(2)}</span>
-        </div>
-        <div className="tarjeta-metrica tarjeta-metrica--destacada">
-          <span className="tarjeta-metrica__etiqueta">Saldo disponible (deudas pendientes no restan)</span>
-          <span className="tarjeta-metrica__valor">Bs {resumen.saldo.toFixed(2)}</span>
-        </div>
-      </div>
+      </section>
 
       <form className="formulario" onSubmit={enviar}>
+        <h2>Registrar movimiento</h2>
         <div className="formulario__fila">
           <label>
             Tipo
@@ -177,6 +204,16 @@ export default function MovimientosCaja() {
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            Fecha
+            <input
+              type="date"
+              value={form.fecha}
+              max={hoyLocal()}
+              onChange={(e) => actualizar("fecha", e.target.value)}
+              required
+            />
           </label>
           <label>
             Descripción
@@ -230,70 +267,88 @@ export default function MovimientosCaja() {
         {TIPOS.map((t) => (
           <div className="tarjeta-metrica" key={t.valor}>
             <span className="tarjeta-metrica__etiqueta">{PLURAL[t.valor]}{t.valor === "proveedor" ? " (pagados)" : ""}</span>
-            <span className="tarjeta-metrica__valor">Bs {(totales.porTipo[t.valor] || 0).toFixed(2)}</span>
+            <span className="tarjeta-metrica__valor">{bs(totales.porTipo[t.valor])}</span>
           </div>
         ))}
-        <div className="tarjeta-metrica tarjeta-metrica--destacada">
-          <span className="tarjeta-metrica__etiqueta">Total salidas</span>
-          <span className="tarjeta-metrica__valor">Bs {totales.total.toFixed(2)}</span>
-        </div>
         <div className="tarjeta-metrica">
           <span className="tarjeta-metrica__etiqueta">Deuda con proveedores</span>
-          <span className="tarjeta-metrica__valor">Bs {totales.deuda.toFixed(2)}</span>
+          <span className="tarjeta-metrica__valor">{bs(totales.deuda)}</span>
         </div>
       </div>
 
       <section className="lista-reciente">
         <h2>Historial</h2>
-        <input
-          type="search"
-          className="buscador__input"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por factura, descripción, tipo, estado o monto…"
-          style={{ width: "100%", marginBottom: "0.75rem" }}
-        />
+        <div className="mov-filtros">
+          <input
+            type="search"
+            className="buscador__input"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por factura, descripción, tipo, estado o monto…"
+          />
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="todos">Todos los tipos</option>
+            {TIPOS.map((t) => (
+              <option key={t.valor} value={t.valor}>{PLURAL[t.valor]}</option>
+            ))}
+          </select>
+        </div>
         {movimientos.length === 0 ? (
           <p className="texto-vacio">Todavía no hay movimientos registrados.</p>
         ) : (
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Descripción</th>
-                <th>N° Factura</th>
-                <th>Monto</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {movimientosFiltrados.map((m) => (
-                <tr key={m.id}>
-                  <td>{new Date(m.fecha).toLocaleDateString("es-BO")}</td>
-                  <td className="tabla__etiqueta">{m.tipo}</td>
-                  <td>{m.descripcion}</td>
-                  <td>{m.numeroFactura || "—"}</td>
-                  <td>{m.tipo === "ingreso" ? "+ " : ""}Bs {Number(m.monto).toFixed(2)}</td>
-                  <td>
-                    {m.tipo === "proveedor" ? (
-                      <select value={estadoDe(m)} onChange={(e) => cambiarEstado(m, e.target.value)}>
-                        <option value="deuda">Deuda</option>
-                        <option value="pagado">Ya pagado</option>
-                      </select>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+          <div className="tabla-scroll">
+            <table className="tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Descripción</th>
+                  <th>N° Factura</th>
+                  <th style={{ textAlign: "right" }}>Monto</th>
+                  <th>Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {movimientosFiltrados.map((m) => {
+                  const f = fmtFecha(m.fecha);
+                  const esIngreso = m.tipo === "ingreso";
+                  return (
+                    <tr key={m.id}>
+                      <td className="mov-fecha">
+                        <strong>{f.dia}</strong>
+                        <span>{f.hora}</span>
+                      </td>
+                      <td><span className={`mov-chip mov-chip--${m.tipo}`}>{m.tipo}</span></td>
+                      <td>{m.descripcion}</td>
+                      <td>{m.numeroFactura || "—"}</td>
+                      <td className={`mov-monto ${esIngreso ? "mov-monto--entra" : "mov-monto--sale"}`}>
+                        {esIngreso ? "+" : "−"} {bs(m.monto)}
+                      </td>
+                      <td>
+                        {m.tipo === "proveedor" ? (
+                          <select
+                            className={`mov-estado mov-estado--${estadoDe(m)}`}
+                            value={estadoDe(m)}
+                            onChange={(e) => cambiarEstado(m, e.target.value)}
+                          >
+                            <option value="deuda">Deuda</option>
+                            <option value="pagado">Ya pagado</option>
+                          </select>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
         {movimientos.length > 0 && movimientosFiltrados.length === 0 && (
           <p className="texto-vacio">Ningún movimiento coincide con la búsqueda.</p>
         )}
-        <button className="boton boton--fantasma" onClick={exportarCSV} disabled={movimientos.length === 0}>
+        <button className="boton boton--fantasma" onClick={exportarCSV} disabled={movimientosFiltrados.length === 0}>
           Descargar CSV
         </button>
       </section>
