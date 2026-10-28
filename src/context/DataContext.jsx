@@ -236,6 +236,10 @@ export function DataProvider({ children }) {
     });
   }
 
+  async function actualizarMovimiento(id, cambios) {
+    await updateDoc(doc(db, "movimientos", id), cambios);
+  }
+
   async function registrarIngreso(ing) {
     await addDoc(collection(db, "ingresos"), {
       ...ing,
@@ -424,6 +428,7 @@ export function DataProvider({ children }) {
     eliminarCierre,
     limpiarCierresAntiguos,
     registrarMovimiento,
+    actualizarMovimiento,
     registrarIngreso,
     registrarGasto,
     registrarMovimientoBarra,
