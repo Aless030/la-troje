@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -97,6 +98,23 @@ export function DataProvider({ children }) {
 
   // Deja en 0 el stock (almacén general, interior y semicubierto) de TODOS los
   // productos, sin borrarlos. Firestore permite máx. 500 escrituras por lote.
+  // Borra TODOS los documentos de las colecciones indicadas (nunca "productos" ni "usuarios").
+  // Devuelve cuántos documentos se borraron.
+  async function limpiarColecciones(nombres) {
+    const PERMITIDAS = ["ventas", "aperturasCaja", "cierres", "gastosCaja", "movimientos", "ingresos", "gastos", "movimientosBarra", "ajustesInventario", "comprasInventario"];
+    let borrados = 0;
+    for (const nombre of nombres.filter((n) => PERMITIDAS.includes(n))) {
+      const snap = await getDocs(collection(db, nombre));
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const lote = writeBatch(db);
+        snap.docs.slice(i, i + 400).forEach((d) => lote.delete(d.ref));
+        await lote.commit();
+        borrados += Math.min(400, snap.docs.length - i);
+      }
+    }
+    return borrados;
+  }
+
   async function ponerStockEnCero() {
     const TAMANO_LOTE = 400;
     for (let i = 0; i < productos.length; i += TAMANO_LOTE) {
@@ -422,6 +440,7 @@ export function DataProvider({ children }) {
     actualizarProducto,
     eliminarProducto,
     ponerStockEnCero,
+    limpiarColecciones,
     registrarVenta,
     anularVentas,
     registrarCierre,

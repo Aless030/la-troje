@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { LISTA_ROLES, ROLES } from "../utils/permisos";
+import LimpiarDatos from "../components/Limpiardatos";
 import { CLAVE_MINIMA, USUARIO_VALIDO, mensajeDeError, useAuth } from "../context/AuthContext";
 
 const FORM_VACIO = { usuario: "", nombre: "", rol: "cajera", password: "" };
@@ -227,6 +228,8 @@ export default function Usuarios() {
           Si alguien olvida su contraseña, usa «Cambiar contraseña» y entrégale la nueva.
         </p>
       </section>
+
+      <LimpiarDatos />
     </div>
   );
 }

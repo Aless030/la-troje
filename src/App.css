@@ -2120,3 +2120,12 @@ input[type="time"] {
 .inv-chip--agotado { background: var(--rojo); color: #fff; }
 .inv-chip--poco { background: #FBE3E6; color: var(--rojo); }
 .inv-chip--ok { background: #DCF1E9; color: var(--verde); }
+
+/* --- Limpiar datos (Usuarios) --- */
+.limpiar-datos { border-color: #F0C2C9; margin-top: 28px; }
+.limpiar-datos h2 { color: var(--rojo); }
+.limpiar-datos__lista { display: grid; gap: 8px; }
+.limpiar-datos .limpiar-datos__opcion { flex-direction: row; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 9px; cursor: pointer; font-weight: 400; color: var(--texto); }
+.limpiar-datos .limpiar-datos__opcion input { width: 20px; min-width: 20px; height: 20px; min-height: 0; padding: 0; margin-top: 2px; }
+.limpiar-datos__opcion span { display: flex; flex-direction: column; gap: 2px; }
+.limpiar-datos__opcion small { color: var(--texto-suave); font-size: 12.5px; }
