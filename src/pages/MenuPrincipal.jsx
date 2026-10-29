@@ -19,7 +19,10 @@ export default function MenuPrincipal({ irA, permitidas }) {
     const ventasHoy = ventas.filter((v) => esHoy(v.fecha));
     const totalQr = ventasHoy.reduce((s, v) => s + (v.montoQr || 0), 0);
     const totalEfectivo = ventasHoy.reduce((s, v) => s + (v.montoEfectivo || 0), 0);
-    const stockBajo = productos.filter((p) => (p.stock ?? 0) <= (p.stockMinimo ?? 3));
+    // Solo los productos que se agotaron del todo (sin nada en almacén ni en las barras).
+    const stockBajo = productos.filter(
+      (p) => Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0) <= 0
+    );
     return {
       cantidadVentas: ventasHoy.length,
       totalQr,
@@ -71,7 +74,7 @@ export default function MenuPrincipal({ irA, permitidas }) {
 
       {resumenHoy.stockBajo.length > 0 && (
         <div className="aviso">
-          <strong>Stock bajo:</strong>{" "}
+          <strong>Sin stock:</strong>{" "}
           {resumenHoy.stockBajo.map((p) => p.nombre).join(", ")}
         </div>
       )}

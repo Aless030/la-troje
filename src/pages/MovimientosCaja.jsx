@@ -20,7 +20,13 @@ const hoyLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const nuevoForm = () => ({ tipo: "sueldo", fecha: hoyLocal(), descripcion: "", numeroFactura: "", monto: "", estado: "deuda" });
+const METODOS = [
+  { valor: "efectivo", etiqueta: "Efectivo" },
+  { valor: "qr", etiqueta: "QR" },
+];
+const etiquetaMetodo = (v) => METODOS.find((m) => m.valor === v)?.etiqueta || "";
+
+const nuevoForm = () => ({ tipo: "sueldo", metodo: "efectivo", fecha: hoyLocal(), descripcion: "", numeroFactura: "", monto: "", estado: "deuda" });
 
 // Si la fecha elegida es hoy se guarda con la hora actual; si es otro día, al mediodía.
 const fechaAISO = (yyyyMmDd) => {
@@ -62,6 +68,7 @@ export default function MovimientosCaja() {
       await registrarMovimiento({
         fecha: fechaAISO(form.fecha),
         tipo: form.tipo,
+        metodo: form.metodo,
         descripcion: form.descripcion.trim(),
         numeroFactura: form.numeroFactura.trim(),
         monto: Number(form.monto),
@@ -90,6 +97,15 @@ export default function MovimientosCaja() {
     return { porTipo, total, deuda, ingresos: porTipo.ingreso };
   }, [movimientos]);
 
+  async function cambiarMetodo(m, metodo) {
+    try {
+      await actualizarMovimiento(m.id, { metodo });
+    } catch (err) {
+      console.error(err);
+      window.alert("No se pudo cambiar la forma de pago.");
+    }
+  }
+
   async function cambiarEstado(m, estado) {
     try {
       await actualizarMovimiento(m.id, { estado, pagadoEn: estado === "pagado" ? new Date().toISOString() : null });
@@ -106,7 +122,7 @@ export default function MovimientosCaja() {
       .filter((m) => filtroTipo === "todos" || m.tipo === filtroTipo)
       .filter((m) =>
         !q ||
-        [m.descripcion, m.numeroFactura, m.tipo, estadoDe(m), String(m.monto)]
+        [m.descripcion, m.numeroFactura, m.tipo, estadoDe(m), etiquetaMetodo(m.metodo), String(m.monto)]
           .filter(Boolean)
           .some((c) => String(c).toLowerCase().includes(q))
       )
@@ -139,6 +155,7 @@ export default function MovimientosCaja() {
         { titulo: "Descripción", clave: "descripcion" },
         { titulo: "N° Factura", clave: "numeroFactura" },
         { titulo: "Monto", clave: "monto" },
+        { titulo: "Forma de pago", clave: "metodoTexto" },
         { titulo: "Estado", clave: "estadoTexto" },
       ],
       movimientosFiltrados.map((m) => ({
@@ -147,6 +164,7 @@ export default function MovimientosCaja() {
         horaTexto: fmtFecha(m.fecha).hora,
         monto: Number(m.monto).toFixed(2),
         estadoTexto: estadoDe(m) || "",
+        metodoTexto: etiquetaMetodo(m.metodo),
       }))
     );
   }
@@ -202,6 +220,14 @@ export default function MovimientosCaja() {
                 <option key={t.valor} value={t.valor}>
                   {t.etiqueta}
                 </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {form.tipo === "ingreso" ? "Cobrado por" : "Pagado por"}
+            <select value={form.metodo} onChange={(e) => actualizar("metodo", e.target.value)}>
+              {METODOS.map((m) => (
+                <option key={m.valor} value={m.valor}>{m.etiqueta}</option>
               ))}
             </select>
           </label>
@@ -304,6 +330,7 @@ export default function MovimientosCaja() {
                   <th>Tipo</th>
                   <th>Descripción</th>
                   <th>N° Factura</th>
+                  <th>Forma de pago</th>
                   <th style={{ textAlign: "right" }}>Monto</th>
                   <th>Estado</th>
                 </tr>
@@ -321,6 +348,18 @@ export default function MovimientosCaja() {
                       <td><span className={`mov-chip mov-chip--${m.tipo}`}>{m.tipo}</span></td>
                       <td>{m.descripcion}</td>
                       <td>{m.numeroFactura || "—"}</td>
+                      <td>
+                        <select
+                          className={`mov-metodo mov-metodo--${m.metodo || "ninguno"}`}
+                          value={m.metodo || ""}
+                          onChange={(e) => cambiarMetodo(m, e.target.value)}
+                        >
+                          {!m.metodo && <option value="">Sin definir</option>}
+                          {METODOS.map((x) => (
+                            <option key={x.valor} value={x.valor}>{x.etiqueta}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className={`mov-monto ${esIngreso ? "mov-monto--entra" : "mov-monto--sale"}`}>
                         {esIngreso ? "+" : "−"} {bs(m.monto)}
                       </td>

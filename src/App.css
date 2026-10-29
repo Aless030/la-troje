@@ -2057,3 +2057,66 @@ input[type="time"] {
 .mov-estado { border-radius: 999px; padding: 3px 8px; border: 1px solid var(--borde); font-weight: 600; font-size: 12.5px; }
 .mov-estado--deuda { background: #FBE3E6; color: var(--rojo); border-color: #F0C2C9; }
 .mov-estado--pagado { background: #DCF1E9; color: var(--verde); border-color: #B7E0D1; }
+
+/* =========================================================
+   VENTAS EN CELULAR: sin espacio a la derecha y campos cómodos
+   ========================================================= */
+.formulario__fila > *,
+.formulario .campo,
+.buscador,
+.precio-con-editar {
+  min-width: 0;
+}
+.buscador__boton > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  html, body, .app, .app__principal { max-width: 100%; overflow-x: clip; }
+  .app__principal { min-width: 0; flex: 1 1 auto; }
+
+  /* Las columnas nunca pueden ser más anchas que la tarjeta */
+  .formulario__fila { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+
+  /* Campos más altos y fáciles de tocar */
+  .formulario input,
+  .formulario select,
+  .formulario textarea,
+  .formulario__fila label > input,
+  .formulario__fila label > select,
+  .lista-reciente label > select,
+  .buscador__boton {
+    min-height: 48px;
+    padding: 12px 14px;
+  }
+  .formulario textarea { min-height: 84px; }
+  .formulario label, .formulario .campo { gap: 7px; font-size: 13.5px; }
+  .formulario { gap: 16px; }
+
+  /* Precio + botón Cambiar: el botón no empuja al campo */
+  .precio-con-editar { gap: 8px; }
+  .precio-con-editar .boton { flex: 0 0 auto; padding: 0 14px; }
+
+  /* Botones principales a todo el ancho */
+  .formulario > .boton,
+  .formulario__acciones .boton { width: 100%; }
+}
+
+/* --- Movimientos: forma de pago --- */
+.mov-metodo { border-radius: 999px; padding: 3px 8px; border: 1px solid var(--borde); font-weight: 600; font-size: 12.5px; background: #fff; }
+.mov-metodo--efectivo { background: #DCF1E9; color: var(--verde); border-color: #B7E0D1; }
+.mov-metodo--qr { background: #DBE5F7; color: #2A55AC; border-color: #B9CBEE; }
+.mov-metodo--ninguno { color: var(--texto-suave); }
+
+/* --- Inventario: semáforo de stock --- */
+.inv-fila--agotado td:first-child, .inv-fila--poco td:first-child { box-shadow: inset 4px 0 0 var(--rojo); }
+.inv-fila--ok td:first-child { box-shadow: inset 4px 0 0 var(--verde); }
+.inv-fila--agotado td, .inv-fila--poco td { background: #FDF3F4; }
+.inv-fila--ok td { background: #F3FAF6; }
+.inv-chip { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.inv-chip--agotado { background: var(--rojo); color: #fff; }
+.inv-chip--poco { background: #FBE3E6; color: var(--rojo); }
+.inv-chip--ok { background: #DCF1E9; color: var(--verde); }

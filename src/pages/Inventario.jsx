@@ -67,6 +67,11 @@ export default function Inventario() {
   // Stock de cada ubicación al abrir la edición (para no pisar ventas hechas mientras se edita).
   const [stockOriginalEdicion, setStockOriginalEdicion] = useState(null);
   const [busqueda, setBusqueda] = useState("");
+  // Filtros del historial de compras (qué se registró en el inventario y cuándo).
+  const [compraDesde, setCompraDesde] = useState("");
+  const [compraHasta, setCompraHasta] = useState("");
+  const [compraBusqueda, setCompraBusqueda] = useState("");
+  const [compraDestino, setCompraDestino] = useState("todos");
 
   const esBebida = form.familia !== "Comida";
   const esCaja = form.tipoEmpaque === "caja";
@@ -290,7 +295,35 @@ export default function Inventario() {
     );
   }, [productos, busqueda]);
 
-  const comprasRecientes = useMemo(() => comprasInventario.slice(0, 15), [comprasInventario]);
+  const hayFiltroCompras = Boolean(compraDesde || compraHasta || compraBusqueda.trim() || compraDestino !== "todos");
+  const comprasFiltradas = useMemo(() => {
+    const desde = compraDesde ? new Date(`${compraDesde}T00:00:00`).getTime() : null;
+    const hasta = compraHasta ? new Date(`${compraHasta}T23:59:59.999`).getTime() : null;
+    const q = compraBusqueda.trim().toLowerCase();
+    return [...comprasInventario]
+      .filter((c) => {
+        const t = new Date(c.fecha).getTime();
+        if (desde !== null && !(t >= desde)) return false;
+        if (hasta !== null && !(t <= hasta)) return false;
+        if (compraDestino !== "todos" && c.destino !== compraDestino) return false;
+        if (q && !`${c.producto || ""} ${c.factura || ""}`.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .sort((a, b) => (new Date(b.fecha).getTime() || 0) - (new Date(a.fecha).getTime() || 0));
+  }, [comprasInventario, compraDesde, compraHasta, compraBusqueda, compraDestino]);
+  // Sin filtros se muestran las últimas 15; con filtros, todo lo que coincida.
+  const comprasRecientes = useMemo(
+    () => (hayFiltroCompras ? comprasFiltradas : comprasFiltradas.slice(0, 15)),
+    [hayFiltroCompras, comprasFiltradas]
+  );
+
+  // Estado de cada producto según su existencia total (almacén + barras).
+  function estadoStock(p) {
+    const total = Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0);
+    if (total <= 0) return { clave: "agotado", etiqueta: "Agotado" };
+    if (total <= Number(p.stockMinimo ?? 3)) return { clave: "poco", etiqueta: "Poco stock" };
+    return { clave: "ok", etiqueta: "Stock OK" };
+  }
 
   // Valor actual de todas las existencias, usando el precio de compra unitario.
   const valorTotalCompra = useMemo(() =>
@@ -642,8 +675,11 @@ export default function Inventario() {
             </thead>
             <tbody>
               {productosFiltrados.map((p) => (
-                <tr key={p.id} className={(p.stock ?? 0) <= (p.stockMinimo ?? 3) ? "tabla__fila--alerta" : ""}>
-                  <td>{p.nombre}</td>
+                <tr key={p.id} className={`inv-fila inv-fila--${estadoStock(p).clave}`}>
+                  <td>
+                    {p.nombre}
+                    <span className={`inv-chip inv-chip--${estadoStock(p).clave}`}>{estadoStock(p).etiqueta}</span>
+                  </td>
                   <td className="tabla__etiqueta">{p.familia || "—"}</td>
                   <td className="tabla__etiqueta">{p.unidadVenta || "Botella"}</td>
                   <td>Bs {Number(p.precio || 0).toFixed(2)}</td>
@@ -694,9 +730,43 @@ export default function Inventario() {
       </section>
 
       <section className="lista-reciente">
-        <h2>Últimas compras registradas</h2>
+        <h2>{hayFiltroCompras ? `Compras registradas (${comprasFiltradas.length})` : "Últimas compras registradas"}</h2>
+        <div className="formulario__fila">
+          <label>
+            Desde
+            <input type="date" value={compraDesde} max={compraHasta || undefined} onChange={(e) => setCompraDesde(e.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={compraHasta} min={compraDesde || undefined} onChange={(e) => setCompraHasta(e.target.value)} />
+          </label>
+          <label>
+            Destino
+            <select value={compraDestino} onChange={(e) => setCompraDestino(e.target.value)}>
+              <option value="todos">Todos</option>
+              {DESTINOS.map((d) => (
+                <option key={d.valor} value={d.valor}>{d.etiqueta}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Producto o factura
+            <input value={compraBusqueda} onChange={(e) => setCompraBusqueda(e.target.value)} placeholder="Buscar…" />
+          </label>
+        </div>
+        {hayFiltroCompras && (
+          <button
+            type="button"
+            className="boton boton--enlace"
+            onClick={() => { setCompraDesde(""); setCompraHasta(""); setCompraBusqueda(""); setCompraDestino("todos"); }}
+          >
+            Quitar filtros
+          </button>
+        )}
         {comprasRecientes.length === 0 ? (
-          <p className="texto-vacio">Todavía no hay compras registradas.</p>
+          <p className="texto-vacio">
+            {comprasInventario.length === 0 ? "Todavía no hay compras registradas." : "Ninguna compra coincide con los filtros."}
+          </p>
         ) : (
           <table className="tabla">
             <thead>
