@@ -1,4 +1,5 @@
 import { descargarReporteCierrePDF } from "../utils/pdf";
+import { descargarReporteCierreXLSX } from "../utils/xlsx";
 
 const bs = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
 
@@ -152,6 +153,9 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
       <div className="formulario__acciones">
         <button type="button" className="boton boton--primario" onClick={() => descargarReporteCierrePDF(cierre)}>
           Descargar PDF
+        </button>
+        <button type="button" className="boton boton--fantasma" onClick={() => descargarReporteCierreXLSX(cierre)}>
+          Descargar Excel
         </button>
         {onCerrar && (
           <button type="button" className="boton boton--fantasma" onClick={onCerrar}>

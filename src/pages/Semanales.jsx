@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { descargarCSV } from "../utils/csv";
+import { descargarXLSX } from "../utils/xlsx";
 
 const CATEGORIAS_GASTO = ["agua", "luz", "internet", "sueldos", "planillas", "otro"];
 
@@ -76,8 +77,8 @@ export default function Semanales() {
     setGastoForm({ categoria: "agua", monto: "", descripcion: "" });
   }
 
-  function exportar() {
-    const filas = [
+  function filasSemana() {
+    return [
       ...ingresosSemana.map((i) => ({
         fecha: new Date(i.fecha).toLocaleDateString("es-BO"),
         movimiento: "Ingreso",
@@ -91,16 +92,21 @@ export default function Semanales() {
         monto: g.monto.toFixed(2),
       })),
     ];
-    descargarCSV(
-      "semanal",
-      [
-        { titulo: "Fecha", clave: "fecha" },
-        { titulo: "Movimiento", clave: "movimiento" },
-        { titulo: "Detalle", clave: "detalle" },
-        { titulo: "Monto", clave: "monto" },
-      ],
-      filas
-    );
+  }
+
+  const columnasSemana = [
+    { titulo: "Fecha", clave: "fecha" },
+    { titulo: "Movimiento", clave: "movimiento" },
+    { titulo: "Detalle", clave: "detalle" },
+    { titulo: "Monto", clave: "monto" },
+  ];
+
+  function exportar() {
+    descargarCSV("semanal", columnasSemana, filasSemana());
+  }
+
+  function exportarExcel() {
+    descargarXLSX("semanal", columnasSemana, filasSemana(), "Semana");
   }
 
   return (
@@ -194,7 +200,10 @@ export default function Semanales() {
 
       {error && <div className="formulario__error">{error}</div>}
 
-      <button className="boton boton--fantasma" onClick={exportar}>Descargar CSV de la semana</button>
+      <div className="formulario__acciones">
+        <button className="boton boton--fantasma" onClick={exportar}>Descargar CSV de la semana</button>
+        <button className="boton boton--fantasma" onClick={exportarExcel}>Descargar Excel de la semana</button>
+      </div>
     </div>
   );
 }

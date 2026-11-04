@@ -4,9 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { esSoloLectura } from "../utils/permisos";
 import { descargarCSV } from "../utils/csv";
 import { descargarPDF } from "../utils/pdf";
+import { descargarXLSX } from "../utils/xlsx";
 import { eventoDeRegistro, listarEventos, mapaAperturas, nombreArchivoEvento } from "../utils/Evento";
 
 const TODOS = "todos";
+const FAMILIA_TRAGOS = "Tragos"; // los tragos del recetario no son un producto de inventario
 
 export default function Reportes() {
   const { ventas, productos, aperturasCaja, cierres, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
@@ -17,6 +19,8 @@ export default function Reportes() {
   // de madrugada queda en el evento de esa noche. null = el evento más reciente.
   const [eventoElegido, setEventoElegido] = useState(null);
   const [vista, setVista] = useState("mesero");
+  // Filtro por familia (Licores, Cervezas, Comida, Tragos…). TODOS = sin filtro.
+  const [familia, setFamilia] = useState(TODOS);
 
   // Estado local del formulario de ajuste de inventario: apertura y saldo real
   // contado, por producto. Se llenan a mano antes de guardar el ajuste.
@@ -40,12 +44,38 @@ export default function Reportes() {
   const textoEvento = eventoActual ? eventoActual.etiqueta : "Todos los eventos";
   const sufijoArchivo = eventoActual ? nombreArchivoEvento(eventoActual) : "todos-los-eventos";
 
-  const ventasFiltradas = useMemo(
+  // Ventas del evento elegido (sin filtrar por familia: el ajuste de inventario usa estas).
+  const ventasEvento = useMemo(
     () =>
       eventoId === TODOS
         ? ventas
         : ventas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoId),
     [ventas, aperturasPorId, eventoId]
+  );
+
+  // Familia de cada línea vendida: la del producto en inventario; los tragos van en "Tragos".
+  const familiaDeVenta = (v) => {
+    if (v.recetaId) return FAMILIA_TRAGOS;
+    const p = productos.find(
+      (x) => x.id === v.productoId || (x.nombre || "").trim().toLowerCase() === (v.producto || "").trim().toLowerCase()
+    );
+    return p ? p.familia || "Licores" : "Otros";
+  };
+
+  const familias = useMemo(() => {
+    const lista = new Set(productos.map((p) => p.familia || "Licores"));
+    if (ventas.some((v) => v.recetaId)) lista.add(FAMILIA_TRAGOS);
+    return [...lista].sort((a, b) => a.localeCompare(b, "es"));
+  }, [productos, ventas]);
+  // Si la familia elegida ya no existe, se vuelve a "todas".
+  const familiaActiva = vista !== "ajuste" && familia !== TODOS && familias.includes(familia) ? familia : TODOS;
+  const textoFamilia = familiaActiva === TODOS ? "" : ` — ${familiaActiva}`;
+  const sufijoFamilia = familiaActiva === TODOS ? "" : `-${familiaActiva.toLowerCase().replace(/\s+/g, "-")}`;
+
+  const ventasFiltradas = useMemo(
+    () => (familiaActiva === TODOS ? ventasEvento : ventasEvento.filter((v) => familiaDeVenta(v) === familiaActiva)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ventasEvento, familiaActiva, productos]
   );
 
   // Las cortesías no son venta: no se suman a ningún total. Van en su propia pestaña.
@@ -111,7 +141,9 @@ export default function Reportes() {
   // Cuánto dinero hay parado en mercadería: por producto y por ubicación (almacén,
   // Interior, Semicubierto), a precio de venta actual de cada producto.
   const inventarioPorBarra = useMemo(() => {
-    const filas = productos.map((p) => {
+    const filas = productos
+      .filter((p) => familiaActiva === TODOS || (p.familia || "Licores") === familiaActiva)
+      .map((p) => {
       const precio = Number(p.precio) || 0;
       const stockAlmacen = p.stock ?? 0;
       const stockInterior = p.stockInterior ?? 0;
@@ -137,7 +169,7 @@ export default function Reportes() {
       { almacen: 0, interior: 0, semicubierto: 0, total: 0 }
     );
     return { filas: filas.sort((a, b) => b.valorTotal - a.valorTotal), totales };
-  }, [productos]);
+  }, [productos, familiaActiva]);
 
   // Reporte de comandas: el detalle de cada línea vendida, como en la planilla
   // de comandas (N°, fecha, mesero, producto, unidad, monto, forma de pago, total).
@@ -176,7 +208,7 @@ export default function Reportes() {
   // Venta total por producto en el evento elegido, para el ajuste de inventario.
   const ventaPorProducto = useMemo(() => {
     const mapa = {};
-    ventasFiltradas.forEach((v) => {
+    ventasEvento.forEach((v) => {
       // Un trago gasta cada ingrediente de su receta (en fracciones de botella);
       // un producto normal gasta su cantidad.
       if (Array.isArray(v.consumo) && v.consumo.length > 0) {
@@ -188,7 +220,7 @@ export default function Reportes() {
       }
     });
     return mapa;
-  }, [ventasFiltradas]);
+  }, [ventasEvento]);
 
   const filasAjuste = useMemo(() => {
     return productos.map((p) => {
@@ -303,7 +335,12 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarCSV(`reporte-${vista}-${sufijoArchivo}`, actual.columnas, filas);
+    descargarCSV(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filas);
+  }
+
+  function exportarExcel() {
+    const filas = actual.filas.map((f) => ({ ...f }));
+    descargarXLSX(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filas, actual.titulo);
   }
 
   function exportarPDF() {
@@ -313,7 +350,7 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarPDF(`${actual.titulo} — ${textoEvento}`, actual.columnas, filas, `reporte-${vista}-${sufijoArchivo}`);
+    descargarPDF(`${actual.titulo} — ${textoEvento}${textoFamilia}`, actual.columnas, filas, `reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`);
   }
 
   function exportarAjusteCSV() {
@@ -337,6 +374,20 @@ export default function Reportes() {
       diferencia: f.diferencia.toFixed(2),
     }));
     descargarCSV(`ajuste-inventario-${sufijoArchivo}`, columnas, filas);
+  }
+
+  function exportarAjusteExcel() {
+    const columnas = [
+      { titulo: "Producto", clave: "producto" },
+      { titulo: "Unidad", clave: "unidad" },
+      { titulo: "Monto Bs", clave: "monto" },
+      { titulo: "Apertura", clave: "apertura" },
+      { titulo: "Venta", clave: "venta" },
+      { titulo: "Final", clave: "final" },
+      { titulo: "Saldo", clave: "saldo" },
+      { titulo: "Diferencia", clave: "diferencia" },
+    ];
+    descargarXLSX(`ajuste-inventario-${sufijoArchivo}`, columnas, filasAjuste, "Ajuste de inventario");
   }
 
   function exportarAjustePDF() {
@@ -373,6 +424,10 @@ export default function Reportes() {
     descargarCSV("reporte-inventario-barras", columnasInventario, filas);
   }
 
+  function exportarInventarioExcel() {
+    descargarXLSX(`reporte-inventario-barras${sufijoFamilia}`, columnasInventario, inventarioPorBarra.filas, "Inventario y barras");
+  }
+
   function exportarInventarioPDF() {
     const filas = inventarioPorBarra.filas.map((f) => ({ ...f, valorTotal: f.valorTotal.toFixed(2) }));
     descargarPDF("Inventario y barras", columnasInventario, filas, "reporte-inventario-barras");
@@ -382,7 +437,7 @@ export default function Reportes() {
     <div className="pagina">
       <header className="pagina__cabecera">
         <h1>Reportes</h1>
-        <p>Elige el evento y descarga en CSV o PDF. Cada evento incluye toda la noche, aunque pase de medianoche.</p>
+        <p>Elige el evento (y la familia) y descarga en Excel, CSV o PDF. Cada evento incluye toda la noche, aunque pase de medianoche.</p>
       </header>
 
       <div className="formulario__fila">
@@ -395,6 +450,17 @@ export default function Reportes() {
             ))}
           </select>
         </label>
+        {vista !== "ajuste" && (
+          <label>
+            Familia
+            <select value={familiaActiva} onChange={(e) => setFamilia(e.target.value)}>
+              <option value={TODOS}>Todas (comida, bebidas, tragos…)</option>
+              {familias.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="tarjetas-resumen">
@@ -519,6 +585,7 @@ export default function Reportes() {
               {guardandoAjuste ? "Guardando…" : "Guardar ajuste de inventario"}
             </button>
             <button className="boton boton--fantasma" onClick={exportarAjusteCSV}>Descargar CSV</button>
+            <button className="boton boton--fantasma" onClick={exportarAjusteExcel}>Descargar Excel</button>
             <button className="boton boton--fantasma" onClick={exportarAjustePDF}>Descargar PDF</button>
           </div>
           {mensajeAjuste && <div className="formulario__error formulario__error--exito">{mensajeAjuste}</div>}
@@ -628,6 +695,13 @@ export default function Reportes() {
             </button>
             <button
               className="boton boton--fantasma"
+              onClick={exportarInventarioExcel}
+              disabled={inventarioPorBarra.filas.length === 0}
+            >
+              Descargar Excel
+            </button>
+            <button
+              className="boton boton--fantasma"
               onClick={exportarInventarioPDF}
               disabled={inventarioPorBarra.filas.length === 0}
             >
@@ -671,6 +745,9 @@ export default function Reportes() {
           <div className="formulario__acciones">
             <button className="boton boton--primario" onClick={exportarCSV} disabled={actual.filas.length === 0}>
               Descargar CSV
+            </button>
+            <button className="boton boton--fantasma" onClick={exportarExcel} disabled={actual.filas.length === 0}>
+              Descargar Excel
             </button>
             <button className="boton boton--fantasma" onClick={exportarPDF} disabled={actual.filas.length === 0}>
               Descargar PDF

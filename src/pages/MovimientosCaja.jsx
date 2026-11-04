@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { descargarCSV } from "../utils/csv";
+import { descargarXLSX } from "../utils/xlsx";
 
 const TIPOS = [
   { valor: "sueldo", etiqueta: "Sueldo" },
@@ -145,10 +146,7 @@ export default function MovimientosCaja() {
     return { ventasTotales, ventasQr, ventasEfectivo, movs, ingresosExtra, gastosSemanales, gastosDeCaja, entradas, salidas, saldo: entradas - salidas };
   }, [ventas, gastos, gastosCaja, totales]);
 
-  function exportarCSV() {
-    descargarCSV(
-      "movimientos-caja",
-      [
+  const columnasExport = [
         { titulo: "Fecha", clave: "fechaTexto" },
         { titulo: "Hora", clave: "horaTexto" },
         { titulo: "Tipo", clave: "tipo" },
@@ -157,16 +155,24 @@ export default function MovimientosCaja() {
         { titulo: "Monto", clave: "monto" },
         { titulo: "Forma de pago", clave: "metodoTexto" },
         { titulo: "Estado", clave: "estadoTexto" },
-      ],
-      movimientosFiltrados.map((m) => ({
-        ...m,
-        fechaTexto: fmtFecha(m.fecha).dia,
-        horaTexto: fmtFecha(m.fecha).hora,
-        monto: Number(m.monto).toFixed(2),
-        estadoTexto: estadoDe(m) || "",
-        metodoTexto: etiquetaMetodo(m.metodo),
-      }))
-    );
+  ];
+
+  const filasExport = () =>
+    movimientosFiltrados.map((m) => ({
+      ...m,
+      fechaTexto: fmtFecha(m.fecha).dia,
+      horaTexto: fmtFecha(m.fecha).hora,
+      monto: Number(m.monto).toFixed(2),
+      estadoTexto: estadoDe(m) || "",
+      metodoTexto: etiquetaMetodo(m.metodo),
+    }));
+
+  function exportarCSV() {
+    descargarCSV("movimientos-caja", columnasExport, filasExport());
+  }
+
+  function exportarExcel() {
+    descargarXLSX("movimientos-caja", columnasExport, filasExport(), "Movimientos");
   }
 
   const fila = (etiqueta, valor, extra = "") => (
@@ -389,6 +395,9 @@ export default function MovimientosCaja() {
         )}
         <button className="boton boton--fantasma" onClick={exportarCSV} disabled={movimientosFiltrados.length === 0}>
           Descargar CSV
+        </button>
+        <button className="boton boton--fantasma" onClick={exportarExcel} disabled={movimientosFiltrados.length === 0}>
+          Descargar Excel
         </button>
       </section>
     </div>

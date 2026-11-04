@@ -6,3 +6,16 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# El service worker y el manifest nunca deben quedar guardados en caché del navegador,
+# así cada celular recibe la versión nueva de la app.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "no-cache"
