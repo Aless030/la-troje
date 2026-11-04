@@ -1,44 +1,77 @@
 import { jsPDF } from "jspdf";
 
+// Tabla simple en PDF. Horizontal si hay muchas columnas, el texto largo se parte en líneas
+// (nunca se corta) y la tabla sigue en páginas nuevas con su encabezado repetido.
 export function descargarPDF(titulo, columnas, filas, nombreArchivo) {
-  const doc = new jsPDF({ unit: "pt" });
-  const margen = 40;
-  let y = 50;
+  const horizontal = columnas.length > 5;
+  const doc = new jsPDF({ unit: "pt", orientation: horizontal ? "landscape" : "portrait" });
+  const ancho = doc.internal.pageSize.getWidth();
+  const alto = doc.internal.pageSize.getHeight();
+  const margen = 36;
+  const derecha = ancho - margen;
+  const fuente = horizontal ? 8 : 9;
+  let y = 46;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("LA TROJE", margen, y);
-  y += 20;
-  doc.setFontSize(12);
-  doc.text(titulo, margen, y);
-  y += 10;
-  doc.setDrawColor(180);
-  doc.line(margen, y, 555, y);
-  y += 20;
-
-  const anchoCol = (555 - margen) / columnas.length;
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  columnas.forEach((c, i) => {
-    doc.text(String(c.titulo), margen + i * anchoCol, y);
+  // Ancho de cada columna según lo que contiene (con un mínimo y un máximo razonables).
+  doc.setFontSize(fuente);
+  const pesos = columnas.map((c) => {
+    const largos = filas.slice(0, 300).map((f) => String(f[c.clave] ?? "").length);
+    const maxLargo = Math.max(String(c.titulo).length, ...largos);
+    return Math.min(34, Math.max(6, maxLargo));
   });
-  y += 14;
-  doc.setDrawColor(220);
-  doc.line(margen, y - 8, 555, y - 8);
-  doc.setFont("helvetica", "normal");
+  const sumaPesos = pesos.reduce((a, b) => a + b, 0);
+  const anchos = pesos.map((w) => ((derecha - margen) * w) / sumaPesos);
+  const xs = anchos.reduce((acc, w, i) => [...acc, i === 0 ? margen : acc[i - 1] + anchos[i - 1]], []);
 
-  filas.forEach((fila) => {
-    if (y > 780) {
+  const encabezadoPagina = () => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LA TROJE", margen, y);
+    doc.setFontSize(10);
+    doc.text(titulo, margen + 90, y);
+    y += 8;
+    doc.setDrawColor(180);
+    doc.line(margen, y, derecha, y);
+    y += 14;
+  };
+  const encabezadoTabla = () => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fuente);
+    columnas.forEach((c, i) => doc.text(doc.splitTextToSize(String(c.titulo), anchos[i] - 4), xs[i], y));
+    y += 12;
+    doc.setDrawColor(220);
+    doc.line(margen, y - 8, derecha, y - 8);
+    doc.setFont("helvetica", "normal");
+  };
+
+  encabezadoPagina();
+  encabezadoTabla();
+
+  filas.forEach((fila, n) => {
+    const lineas = columnas.map((c, i) => doc.splitTextToSize(String(fila[c.clave] ?? ""), anchos[i] - 4));
+    const altoFila = Math.max(...lineas.map((l) => l.length)) * (fuente + 2) + 4;
+    if (y + altoFila > alto - 40) {
       doc.addPage();
-      y = 50;
+      y = 46;
+      encabezadoPagina();
+      encabezadoTabla();
     }
-    columnas.forEach((c, i) => {
-      const valor = String(fila[c.clave] ?? "");
-      doc.text(valor.substring(0, 28), margen + i * anchoCol, y);
-    });
-    y += 16;
+    if (n % 2 === 1) {
+      doc.setFillColor(244, 246, 250);
+      doc.rect(margen, y - fuente - 1, derecha - margen, altoFila, "F");
+    }
+    columnas.forEach((c, i) => doc.text(lineas[i], xs[i], y));
+    y += altoFila;
   });
+
+  const paginas = doc.getNumberOfPages();
+  for (let k = 1; k <= paginas; k++) {
+    doc.setPage(k);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(`Página ${k} de ${paginas}`, derecha, alto - 20, { align: "right" });
+    doc.setTextColor(0);
+  }
 
   doc.save(nombreArchivo.endsWith(".pdf") ? nombreArchivo : `${nombreArchivo}.pdf`);
 }

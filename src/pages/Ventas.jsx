@@ -213,6 +213,9 @@ export default function Ventas() {
   const [aperturaForm, setAperturaForm] = useState({ cajera: "", cajaChica: "", barra: "interior", meseros: "", evento: "" });
   // Evento cuyas ventas se listan abajo ("" = el de la caja abierta, o el más reciente).
   const [eventoVistaId, setEventoVistaId] = useState("");
+  // Buscador de la lista "Ventas del evento" (por N° de comanda, mesero o producto).
+  const [busquedaVentas, setBusquedaVentas] = useState("");
+  const [limiteVentas, setLimiteVentas] = useState(50);
   const [gastoForm, setGastoForm] = useState({ concepto: "", monto: "", observaciones: "" });
   const [mensajeApertura, setMensajeApertura] = useState("");
   const [mensajeGasto, setMensajeGasto] = useState("");
@@ -382,7 +385,17 @@ export default function Ventas() {
     () => ventasTodas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoVistaActivo),
     [ventasTodas, aperturasPorId, eventoVistaActivo]
   );
-  const ventasEventoRecientes = ventasDelEvento.slice(0, 20);
+  // Con búsqueda se muestran TODAS las coincidencias; sin búsqueda, de a 50 con botón "Mostrar más".
+  const textoBusquedaVentas = busquedaVentas.trim().toLowerCase();
+  const ventasCoinciden = useMemo(() => {
+    if (!textoBusquedaVentas) return ventasDelEvento;
+    return ventasDelEvento.filter((v) =>
+      [v.comanda, v.mesero, v.producto, v.formaPago, v.anulada ? "anulada" : ""]
+        .filter((c) => c !== undefined && c !== null && c !== "")
+        .some((c) => String(c).toLowerCase().includes(textoBusquedaVentas))
+    );
+  }, [ventasDelEvento, textoBusquedaVentas]);
+  const ventasEventoRecientes = textoBusquedaVentas ? ventasCoinciden : ventasCoinciden.slice(0, limiteVentas);
 
   // Siguiente N° de comanda para cada mesero, según su última venta registrada
   const siguienteComandaPorMesero = useMemo(() => {
@@ -1049,11 +1062,28 @@ export default function Ventas() {
           <p className="texto-vacio">Todavía no hay ventas registradas en este evento.</p>
         ) : (
           <>
+            <div className="formulario__fila">
+              <label>
+                Buscar comanda
+                <input
+                  type="search"
+                  inputMode="search"
+                  value={busquedaVentas}
+                  onChange={(e) => setBusquedaVentas(e.target.value)}
+                  placeholder="N° de comanda, mesero o producto…"
+                />
+              </label>
+            </div>
             <p className="texto-vacio">
-              {ventasDelEvento.length > ventasEventoRecientes.length
-                ? `Mostrando las ${ventasEventoRecientes.length} más recientes de ${ventasDelEvento.length} ventas del evento.`
+              {textoBusquedaVentas
+                ? `${ventasCoinciden.length} línea${ventasCoinciden.length === 1 ? "" : "s"} encontrada${ventasCoinciden.length === 1 ? "" : "s"} de ${ventasDelEvento.length} del evento.`
+                : ventasCoinciden.length > ventasEventoRecientes.length
+                ? `Mostrando ${ventasEventoRecientes.length} de ${ventasDelEvento.length} ventas del evento (las más recientes primero).`
                 : `${ventasDelEvento.length} venta${ventasDelEvento.length === 1 ? "" : "s"} en el evento.`}
             </p>
+            {textoBusquedaVentas && ventasCoinciden.length === 0 && (
+              <p className="texto-vacio">Ninguna venta coincide con la búsqueda.</p>
+            )}
             <table className="tabla">
               <thead>
                 <tr>
@@ -1105,6 +1135,16 @@ export default function Ventas() {
                 ))}
               </tbody>
             </table>
+            {!textoBusquedaVentas && ventasCoinciden.length > ventasEventoRecientes.length && (
+              <div className="formulario__acciones" style={{ marginTop: 12 }}>
+                <button type="button" className="boton boton--fantasma" onClick={() => setLimiteVentas((n) => n + 50)}>
+                  Mostrar 50 más
+                </button>
+                <button type="button" className="boton boton--fantasma" onClick={() => setLimiteVentas(ventasCoinciden.length)}>
+                  Mostrar todas ({ventasCoinciden.length})
+                </button>
+              </div>
+            )}
           </>
         )}
       </section>

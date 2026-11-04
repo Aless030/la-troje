@@ -11,7 +11,7 @@ const TODOS = "todos";
 const FAMILIA_TRAGOS = "Tragos"; // los tragos del recetario no son un producto de inventario
 
 export default function Reportes() {
-  const { ventas, productos, aperturasCaja, cierres, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
+  const { ventas, ventasTodas, productos, aperturasCaja, cierres, ajustesInventario, registrarAjusteInventario, eliminarAjusteInventario } = useData();
   // El socio auxiliar solo mira: no ve la pestaña de ajustes (que escribe en el inventario).
   const { perfil } = useAuth();
   const soloLectura = esSoloLectura(perfil?.rol);
@@ -31,15 +31,21 @@ export default function Reportes() {
 
   const aperturasPorId = useMemo(() => mapaAperturas(aperturasCaja), [aperturasCaja]);
   const eventos = useMemo(
-    () => listarEventos({ aperturas: aperturasCaja, ventas, cierres }),
-    [aperturasCaja, ventas, cierres]
+    () => listarEventos({ aperturas: aperturasCaja, ventas: ventasTodas, cierres }),
+    [aperturasCaja, ventasTodas, cierres]
   );
+  // Por defecto: el evento más reciente QUE TENGA ventas (una caja recién abierta, sin ventas,
+  // no debe tapar la noche anterior).
+  const eventoConVentas = useMemo(() => {
+    const conVentas = new Set(ventasTodas.map((v) => eventoDeRegistro(v, aperturasPorId).id));
+    return eventos.find((e) => conVentas.has(e.id))?.id;
+  }, [eventos, ventasTodas, aperturasPorId]);
   const eventoId =
     eventoElegido === TODOS
       ? TODOS
       : eventoElegido && eventos.some((e) => e.id === eventoElegido)
       ? eventoElegido
-      : eventos[0]?.id || TODOS;
+      : eventoConVentas || eventos[0]?.id || TODOS;
   const eventoActual = eventos.find((e) => e.id === eventoId) || null;
   const textoEvento = eventoActual ? eventoActual.etiqueta : "Todos los eventos";
   const sufijoArchivo = eventoActual ? nombreArchivoEvento(eventoActual) : "todos-los-eventos";
@@ -51,6 +57,15 @@ export default function Reportes() {
         ? ventas
         : ventas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoId),
     [ventas, aperturasPorId, eventoId]
+  );
+
+  // TODAS las líneas del evento (vendidas, cortesías y anuladas), para el reporte de comandas.
+  const lineasEventoTodas = useMemo(
+    () =>
+      eventoId === TODOS
+        ? ventasTodas
+        : ventasTodas.filter((v) => eventoDeRegistro(v, aperturasPorId).id === eventoId),
+    [ventasTodas, aperturasPorId, eventoId]
   );
 
   // Familia de cada línea vendida: la del producto en inventario; los tragos van en "Tragos".
@@ -76,6 +91,12 @@ export default function Reportes() {
     () => (familiaActiva === TODOS ? ventasEvento : ventasEvento.filter((v) => familiaDeVenta(v) === familiaActiva)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ventasEvento, familiaActiva, productos]
+  );
+
+  const lineasFiltradas = useMemo(
+    () => (familiaActiva === TODOS ? lineasEventoTodas : lineasEventoTodas.filter((v) => familiaDeVenta(v) === familiaActiva)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lineasEventoTodas, familiaActiva, productos]
   );
 
   // Las cortesías no son venta: no se suman a ningún total. Van en su propia pestaña.
@@ -173,21 +194,45 @@ export default function Reportes() {
 
   // Reporte de comandas: el detalle de cada línea vendida, como en la planilla
   // de comandas (N°, fecha, mesero, producto, unidad, monto, forma de pago, total).
+  // Incluye TODO: vendidas, cortesías y anuladas (con su estado). Solo las vendidas suman al total.
   const comandas = useMemo(() => {
-    const ordenadas = [...ventasPagadas].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-    return ordenadas.map((v, i) => ({
-      n: i + 1,
-      comanda: v.comanda || "—",
-      fecha: new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-      mesero: v.mesero || "—",
-      producto: v.producto,
-      unidad: v.unidad || "—",
-      cantidad: v.cantidad,
-      monto: v.precioUnitario,
-      formaPago: v.formaPago,
-      total: v.total,
-    }));
-  }, [ventasPagadas]);
+    const ordenadas = [...lineasFiltradas].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    return ordenadas.map((v, i) => {
+      const estado = v.anulada ? "ANULADA" : v.formaPago === "cortesia" ? "CORTESÍA" : "Vendida";
+      return {
+        n: i + 1,
+        comanda: v.comanda || "—",
+        fecha: new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        barra: v.barra === "interior" ? "Interior" : v.barra === "semicubierto" ? "Semicubierto" : v.barra || "—",
+        mesero: v.mesero || "—",
+        producto: v.producto,
+        unidad: v.unidad || "—",
+        cantidad: v.cantidad,
+        monto: v.precioUnitario,
+        formaPago: v.formaPago,
+        estado,
+        total: estado === "Vendida" ? v.total : 0,
+        observaciones: v.anulada
+          ? `Anulada${v.anuladaPor ? " por " + v.anuladaPor : ""}${v.motivoAnulacion ? ": " + v.motivoAnulacion : ""} (Bs ${Number(v.total || 0).toFixed(2)})`
+          : v.formaPago === "cortesia"
+          ? `Valor Bs ${Number(v.valorCortesia || 0).toFixed(2)}${v.observaciones ? " — " + v.observaciones : ""}`
+          : v.observaciones || "",
+      };
+    });
+  }, [lineasFiltradas]);
+
+  // Resumen para validar el reporte contra la lista de Ventas.
+  const resumenControl = useMemo(() => {
+    const llaves = new Set(lineasFiltradas.map((v) => `${v.comanda}|${v.mesero}|${v.aperturaId}`));
+    return {
+      lineas: lineasFiltradas.length,
+      comandas: llaves.size,
+      vendidas: ventasPagadas.length,
+      cortesias: ventasCortesia.length,
+      anuladas: lineasFiltradas.filter((v) => v.anulada).length,
+      totalVendido: ventasPagadas.reduce((s, v) => s + Number(v.total || 0), 0),
+    };
+  }, [lineasFiltradas, ventasPagadas, ventasCortesia]);
 
   // Cortesías: solo para control (por ejemplo, ver si algún dueño sacó algo).
   // No se suman: se muestra el precio de la botella tal cual.
@@ -300,13 +345,16 @@ export default function Reportes() {
         { titulo: "N°", clave: "n" },
         { titulo: "N° comanda", clave: "comanda" },
         { titulo: "Fecha y hora", clave: "fecha" },
+        { titulo: "Barra", clave: "barra" },
         { titulo: "Mesero", clave: "mesero" },
         { titulo: "Producto", clave: "producto" },
         { titulo: "Cantidad", clave: "cantidad" },
         { titulo: "Unidad", clave: "unidad" },
         { titulo: "Monto Bs", clave: "monto" },
         { titulo: "Forma de pago", clave: "formaPago" },
+        { titulo: "Estado", clave: "estado" },
         { titulo: "Total Bs", clave: "total" },
+        { titulo: "Observaciones", clave: "observaciones" },
       ],
       filas: comandas,
     },
@@ -328,6 +376,21 @@ export default function Reportes() {
 
   const actual = configuraciones[vista];
 
+  // Descargas: todas las filas + una fila final de TOTAL para poder validar.
+  function filasParaDescargar() {
+    const base = actual.filas.map((f) => ({
+      ...f,
+      total: f.total?.toFixed ? f.total.toFixed(2) : f.total,
+      monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
+      precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
+    }));
+    const suma = (k) => actual.filas.reduce((a, f) => a + Number(f[k] || 0), 0);
+    if (vista === "mesero") base.push({ mesero: "TOTAL", ventas: suma("ventas"), total: suma("total").toFixed(2) });
+    if (vista === "producto") base.push({ producto: "TOTAL", cantidad: suma("cantidad"), total: suma("total").toFixed(2) });
+    if (vista === "comandas") base.push({ producto: "TOTAL VENDIDO", cantidad: actual.filas.filter((f) => f.estado === "Vendida").reduce((a, f) => a + Number(f.cantidad || 0), 0), total: suma("total").toFixed(2) });
+    return base;
+  }
+
   function exportarCSV() {
     const filas = actual.filas.map((f) => ({
       ...f,
@@ -335,12 +398,11 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarCSV(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filas);
+    descargarCSV(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filasParaDescargar());
   }
 
   function exportarExcel() {
-    const filas = actual.filas.map((f) => ({ ...f }));
-    descargarXLSX(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filas, actual.titulo);
+    descargarXLSX(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filasParaDescargar(), actual.titulo);
   }
 
   function exportarPDF() {
@@ -350,7 +412,7 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarPDF(`${actual.titulo} — ${textoEvento}${textoFamilia}`, actual.columnas, filas, `reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`);
+    descargarPDF(`${actual.titulo} — ${textoEvento}${textoFamilia}`, actual.columnas, filasParaDescargar(), `reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`);
   }
 
   function exportarAjusteCSV() {
@@ -477,6 +539,15 @@ export default function Reportes() {
           <span className="tarjeta-metrica__valor">Bs {saldos.totalGeneral.toFixed(2)}</span>
         </div>
       </div>
+
+      {vista !== "ajuste" && vista !== "inventario" && (
+        <p className="texto-vacio" style={{ marginTop: -8 }}>
+          Control del evento{textoFamilia}: <strong>{resumenControl.comandas}</strong> comandas ·{" "}
+          <strong>{resumenControl.lineas}</strong> líneas ({resumenControl.vendidas} vendidas, {resumenControl.cortesias} cortesías,{" "}
+          {resumenControl.anuladas} anuladas) · Total vendido <strong>Bs {resumenControl.totalVendido.toFixed(2)}</strong>. Las anuladas y
+          cortesías aparecen en «Comandas» con su estado y no suman.
+        </p>
+      )}
 
       <div className="pestañas">
         <button
@@ -727,7 +798,7 @@ export default function Reportes() {
                 </thead>
                 <tbody>
                   {actual.filas.map((fila, i) => (
-                    <tr key={i}>
+                    <tr key={i} style={fila.estado === "ANULADA" ? { textDecoration: "line-through", opacity: 0.55 } : undefined}>
                       {actual.columnas.map((c) => (
                         <td key={c.clave} className={c.clave === "formaPago" ? "tabla__etiqueta" : undefined}>
                           {c.clave === "total" || c.clave === "monto" || c.clave === "precio"
