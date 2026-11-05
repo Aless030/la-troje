@@ -115,6 +115,40 @@ export function DataProvider({ children }) {
     return borrados;
   }
 
+  // Limpieza por antigüedad, en dos pasos para poder respaldar antes de borrar.
+  // 1) leerAnterioresA: lee lo anterior a una fecha (sin tocar nada). Las cajas aún abiertas se respetan.
+  // 2) borrarDocumentos: borra exactamente lo que se leyó (y respaldó) en el paso 1.
+  const COLECCIONES_LIMPIABLES = ["ventas", "aperturasCaja", "cierres", "gastosCaja", "movimientos", "ingresos", "gastos", "movimientosBarra", "ajustesInventario", "comprasInventario"];
+
+  async function leerAnterioresA(nombres, limiteMs) {
+    const resultado = {};
+    for (const nombre of nombres.filter((n) => COLECCIONES_LIMPIABLES.includes(n))) {
+      const snap = await getDocs(collection(db, nombre));
+      resultado[nombre] = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => {
+          if (nombre === "aperturasCaja" && r.estado === "abierta") return false;
+          const t = Date.parse(r.fecha) || (r.creadoEn?.toMillis ? r.creadoEn.toMillis() : NaN);
+          return Number.isFinite(t) && t < limiteMs;
+        });
+    }
+    return resultado;
+  }
+
+  async function borrarDocumentos(porColeccion) {
+    let borrados = 0;
+    for (const [nombre, docs] of Object.entries(porColeccion)) {
+      if (!COLECCIONES_LIMPIABLES.includes(nombre)) continue;
+      for (let i = 0; i < docs.length; i += 400) {
+        const lote = writeBatch(db);
+        docs.slice(i, i + 400).forEach((r) => lote.delete(doc(db, nombre, r.id)));
+        await lote.commit();
+        borrados += Math.min(400, docs.length - i);
+      }
+    }
+    return borrados;
+  }
+
   async function ponerStockEnCero() {
     const TAMANO_LOTE = 400;
     for (let i = 0; i < productos.length; i += TAMANO_LOTE) {
@@ -441,6 +475,8 @@ export function DataProvider({ children }) {
     eliminarProducto,
     ponerStockEnCero,
     limpiarColecciones,
+    leerAnterioresA,
+    borrarDocumentos,
     registrarVenta,
     anularVentas,
     registrarCierre,

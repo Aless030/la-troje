@@ -83,3 +83,27 @@ export async function descargarReporteCierreXLSX(c) {
   const nombre = `cierre-${(c.cajera || "caja").replace(/\s+/g, "-")}-${new Date(c.fecha).toISOString().slice(0, 10)}`;
   guardar(XLSX, hojas, nombre);
 }
+
+// Respaldo: una hoja por colección con TODOS los campos de cada registro.
+// hojas: [{ nombre: "Ventas", filas: [{...}, ...] }]
+export async function descargarRespaldoXLSX(nombreArchivo, hojas) {
+  const XLSX = await import("xlsx");
+  const plano = (v) => {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "object") {
+      if (typeof v.toDate === "function") return v.toDate().toISOString(); // fecha de Firebase
+      return JSON.stringify(v);
+    }
+    return v;
+  };
+  const libro = hojas
+    .filter((h) => h.filas.length > 0)
+    .map((h) => {
+      const claves = [...new Set(h.filas.flatMap((f) => Object.keys(f)))];
+      const orden = ["fecha", ...claves.filter((k) => k !== "fecha" && k !== "id"), "id"].filter((k) => claves.includes(k));
+      return { nombre: h.nombre, filas: [orden, ...h.filas.map((f) => orden.map((k) => aCelda(plano(f[k]))))] };
+    });
+  if (libro.length === 0) return false;
+  guardar(XLSX, libro, nombreArchivo);
+  return true;
+}
