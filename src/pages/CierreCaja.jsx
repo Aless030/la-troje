@@ -3,6 +3,7 @@ import { useData } from "../context/DataContext";
 import ReporteCierre from "../components/ReporteTurno";
 import { buscarAperturasActivas, cerrarTurno, construirCierre } from "../utils/Turno";
 import { eventoDeRegistro, listarEventos, mapaAperturas } from "../utils/Evento";
+import { etiquetaBarra } from "../utils/barras";
 
 const ETIQUETAS_DIA = {
   jueves: "Jueves",
@@ -142,7 +143,7 @@ export default function CierreCaja() {
                   className={`caja-tab ${a.id === aperturaActiva.id ? "caja-tab--activa" : ""}`}
                   onClick={() => setAperturaIdElegida(a.id)}
                 >
-                  <strong>{a.barra === "interior" ? "Interior" : "Semicubierto"}</strong>
+                  <strong>{etiquetaBarra(a.barra)}</strong>
                   <span>{a.cajera}</span>
                 </button>
               ))}

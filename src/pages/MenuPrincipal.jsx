@@ -1,3 +1,4 @@
+import { stockTotal } from "../utils/barras";
 import { useMemo } from "react";
 import { useData } from "../context/DataContext";
 
@@ -21,7 +22,7 @@ export default function MenuPrincipal({ irA, permitidas }) {
     const totalEfectivo = ventasHoy.reduce((s, v) => s + (v.montoEfectivo || 0), 0);
     // Solo los productos que se agotaron del todo (sin nada en almacén ni en las barras).
     const stockBajo = productos.filter(
-      (p) => Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0) <= 0
+      (p) => stockTotal(p) <= 0
     );
     return {
       cantidadVentas: ventasHoy.length,

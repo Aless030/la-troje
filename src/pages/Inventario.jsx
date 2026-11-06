@@ -1,13 +1,10 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import { BARRAS, stockTotal } from "../utils/barras";
 
 const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Energizantes", "Vinos", "Comida"];
 const UNIDADES_VENTA = ["Botella", "Vaso", "Lata", "Jarra", "Copa", "Shot", "Cántaro", "Porción"];
-const DESTINOS = [
-  { valor: "general", etiqueta: "Almacén general" },
-  { valor: "interior", etiqueta: "Interior" },
-  { valor: "semicubierto", etiqueta: "Semicubierto" },
-];
+const DESTINOS = [{ valor: "general", etiqueta: "Almacén general" }, ...BARRAS.map((b) => ({ valor: b.valor, etiqueta: b.etiqueta }))];
 
 const VACIO = {
   nombre: "",
@@ -31,11 +28,12 @@ const VACIO = {
   stockGeneral: "",
   stockInterior: "",
   stockSemicubierto: "",
+  stockPalmera: "",
 };
 
 const redondear4 = (n) => Math.round(Number(n || 0) * 10000) / 10000;
 
-// Celda de stock editable en la tabla (−, número, +). Se usa para Almacén, Interior y Semicubierto.
+// Celda de stock editable en la tabla (−, número, +). Se usa para Almacén y cada barra.
 function CeldaStock({ valor, onCambiar }) {
   const actual = Number(valor || 0);
   return (
@@ -193,18 +191,21 @@ export default function Inventario() {
         general: Number(productoActual?.stock || 0),
         interior: Number(productoActual?.stockInterior || 0),
         semicubierto: Number(productoActual?.stockSemicubierto || 0),
+        palmera: Number(productoActual?.stockPalmera || 0),
       };
       const aplicar = (actual, antes, escrito) =>
         Math.max(0, redondear4(Number(actual || 0) + (Math.max(0, Number(escrito) || 0) - antes)));
       const nuevoGeneral = aplicar(productoActual?.stock, original.general, form.stockGeneral);
       const nuevoInterior = aplicar(productoActual?.stockInterior, original.interior, form.stockInterior);
       const nuevoSemicubierto = aplicar(productoActual?.stockSemicubierto, original.semicubierto, form.stockSemicubierto);
+      const nuevoPalmera = aplicar(productoActual?.stockPalmera, original.palmera ?? 0, form.stockPalmera);
 
       await actualizarProducto(editandoId, {
         ...datos,
         stock: nuevoGeneral,
         stockInterior: nuevoInterior,
         stockSemicubierto: nuevoSemicubierto,
+        stockPalmera: nuevoPalmera,
       });
     } else {
       // Compra nueva (o reposición): se suma al almacén elegido y queda registrada con su factura.
@@ -223,16 +224,14 @@ export default function Inventario() {
   }
 
   function editar(p) {
-    const stockTotal =
-      Number(p.stock || 0) +
-      Number(p.stockInterior || 0) +
-      Number(p.stockSemicubierto || 0);
+    const existenciaTotal = stockTotal(p);
 
     setEditandoId(p.id);
     setStockOriginalEdicion({
       general: Number(p.stock || 0),
       interior: Number(p.stockInterior || 0),
       semicubierto: Number(p.stockSemicubierto || 0),
+      palmera: Number(p.stockPalmera || 0),
     });
     setAvisoAuto("");
     setForm({
@@ -242,7 +241,7 @@ export default function Inventario() {
       volumenUnidad: p.volumenUnidad || "ml",
       // Al editar mostramos la cantidad TOTAL existente en todas las ubicaciones.
       tipoEmpaque: "botella",
-      cantidadBotellas: String(Number(stockTotal.toFixed(2))),
+      cantidadBotellas: String(Number(existenciaTotal.toFixed(2))),
       cantidadCajas: "",
       botellasPorCaja: String(p.botellasPorCaja ?? ""),
       botellasSueltas: "",
@@ -257,13 +256,14 @@ export default function Inventario() {
       stockGeneral: String(redondear4(p.stock)),
       stockInterior: String(redondear4(p.stockInterior)),
       stockSemicubierto: String(redondear4(p.stockSemicubierto)),
+      stockPalmera: String(redondear4(p.stockPalmera)),
     });
   }
 
   async function reiniciarTodoEnCero() {
     if (productos.length === 0) return;
     const ok = window.confirm(
-      `Vas a dejar en 0 el stock de ${productos.length} producto(s) (almacén, interior y semicubierto).\n\nLos productos, precios y recetas NO se borran, pero esto no se puede deshacer.\n\n¿Continuar?`
+      `Vas a dejar en 0 el stock de ${productos.length} producto(s) (almacén y todas las barras).\n\nLos productos, precios y recetas NO se borran, pero esto no se puede deshacer.\n\n¿Continuar?`
     );
     if (!ok) return;
     try {
@@ -275,7 +275,7 @@ export default function Inventario() {
     }
   }
 
-  // Edición directa de una ubicación desde la tabla: "stock" (almacén), "stockInterior" o "stockSemicubierto".
+  // Edición directa de una ubicación desde la tabla: "stock" (almacén), o el de una barra.
   async function guardarStock(p, campo, nuevo) {
     await actualizarProducto(p.id, { [campo]: Math.max(0, redondear4(nuevo)) });
   }
@@ -319,7 +319,7 @@ export default function Inventario() {
 
   // Estado de cada producto según su existencia total (almacén + barras).
   function estadoStock(p) {
-    const total = Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0);
+    const total = stockTotal(p);
     if (total <= 0) return { clave: "agotado", etiqueta: "Agotado" };
     if (total <= Number(p.stockMinimo ?? 3)) return { clave: "poco", etiqueta: "Poco stock" };
     return { clave: "ok", etiqueta: "Stock OK" };
@@ -328,8 +328,7 @@ export default function Inventario() {
   // Valor actual de todas las existencias, usando el precio de compra unitario.
   const valorTotalCompra = useMemo(() =>
     productos.reduce((total, p) => {
-      const stockTotal = Number(p.stock || 0) + Number(p.stockInterior || 0) + Number(p.stockSemicubierto || 0);
-      return total + stockTotal * Number(p.precio || 0);
+      return total + stockTotal(p) * Number(p.precio || 0);
     }, 0),
   [productos]);
 
@@ -549,6 +548,16 @@ export default function Inventario() {
                 onChange={(e) => actualizar("stockSemicubierto", e.target.value)}
               />
             </label>
+            <label>
+              Palmera
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.stockPalmera}
+                onChange={(e) => actualizar("stockPalmera", e.target.value)}
+              />
+            </label>
           </div>
         ) : (
           <div className="formulario__fila">
@@ -579,7 +588,7 @@ export default function Inventario() {
             </label>
           )}
           <label>
-            {editandoId ? "Stock total (suma de las 3 ubicaciones)" : "Cantidad total que entra"}
+            {editandoId ? "Stock total (suma de todas las ubicaciones)" : "Cantidad total que entra"}
             <input
               type="text"
               value={
@@ -587,7 +596,8 @@ export default function Inventario() {
                   ? `${redondear4(
                       (Number(form.stockGeneral) || 0) +
                         (Number(form.stockInterior) || 0) +
-                        (Number(form.stockSemicubierto) || 0)
+                        (Number(form.stockSemicubierto) || 0) +
+                        (Number(form.stockPalmera) || 0)
                     )} unidad(es)`
                   : `${cantidadTotal} unidad(es)`
               }
@@ -651,7 +661,7 @@ export default function Inventario() {
           Poner todo el stock en 0
         </button>
         <p className="texto-vacio">
-          Puedes cambiar la cantidad de cada producto directo en la tabla, por ubicación: Almacén, Interior o Semicubierto.
+          Puedes cambiar la cantidad de cada producto directo en la tabla, por ubicación: Almacén, Interior, Semicubierto o Palmera.
         </p>
         {productosFiltrados.length === 0 ? (
           <p className="texto-vacio">
@@ -669,6 +679,7 @@ export default function Inventario() {
                 <th>Almacén</th>
                 <th>Interior</th>
                 <th>Semicubierto</th>
+                <th>Palmera</th>
                 <th></th>
                 <th></th>
               </tr>
@@ -708,6 +719,7 @@ export default function Inventario() {
                   <td><CeldaStock valor={p.stock} onCambiar={(n) => guardarStock(p, "stock", n)} /></td>
                   <td><CeldaStock valor={p.stockInterior} onCambiar={(n) => guardarStock(p, "stockInterior", n)} /></td>
                   <td><CeldaStock valor={p.stockSemicubierto} onCambiar={(n) => guardarStock(p, "stockSemicubierto", n)} /></td>
+                  <td><CeldaStock valor={p.stockPalmera} onCambiar={(n) => guardarStock(p, "stockPalmera", n)} /></td>
                   <td>
                     <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
                   </td>

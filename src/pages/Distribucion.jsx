@@ -1,28 +1,12 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
-
-const BARRAS = [
-  { valor: "interior", etiqueta: "Interior" },
-  { valor: "semicubierto", etiqueta: "Semicubierto" },
-];
+import { BARRAS, campoBarra, etiquetaBarra } from "../utils/barras";
 
 const ACCIONES = [
   { valor: "ingreso", etiqueta: "Ingreso" },
   { valor: "traspaso", etiqueta: "Traspaso" },
   { valor: "baja", etiqueta: "Baja" },
 ];
-
-function campoBarra(barra) {
-  return barra === "interior" ? "stockInterior" : "stockSemicubierto";
-}
-
-function otraBarra(barra) {
-  return barra === "interior" ? "semicubierto" : "interior";
-}
-
-function etiquetaBarra(barra) {
-  return barra === "interior" ? "Interior" : "Semicubierto";
-}
 
 function formatearStock(valor) {
   return Number(valor || 0).toFixed(2);
@@ -33,6 +17,8 @@ export default function Distribucion() {
 
   const [barraActiva, setBarraActiva] = useState("interior");
   const [accionActiva, setAccionActiva] = useState("ingreso");
+  // Barra a la que se traspasa (solo en "Traspaso"). Nunca es la misma que la de origen.
+  const [destinoElegido, setDestinoElegido] = useState("");
   const [productoId, setProductoId] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [motivo, setMotivo] = useState("");
@@ -42,6 +28,8 @@ export default function Distribucion() {
   const [busqueda, setBusqueda] = useState("");
 
   const campoActivo = campoBarra(barraActiva);
+  const barrasDestino = BARRAS.filter((b) => b.valor !== barraActiva);
+  const destino = barrasDestino.some((b) => b.valor === destinoElegido) ? destinoElegido : barrasDestino[0]?.valor;
 
   const productosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
@@ -100,6 +88,7 @@ export default function Distribucion() {
       await registrarMovimientoBarra({
         tipo: accionActiva,
         barra: barraActiva,
+        destino: accionActiva === "traspaso" ? destino : undefined,
         productoId: productoSel.id,
         cantidad: cant,
         motivo: motivo.trim(),
@@ -108,7 +97,7 @@ export default function Distribucion() {
         accionActiva === "ingreso"
           ? `Se pasaron ${cant} unidad(es) de "${productoSel.nombre}" del almacén a ${etiquetaBarra(barraActiva)}.`
           : accionActiva === "traspaso"
-          ? `Se traspasaron ${cant} unidad(es) de "${productoSel.nombre}" de ${etiquetaBarra(barraActiva)} a ${etiquetaBarra(otraBarra(barraActiva))}.`
+          ? `Se traspasaron ${cant} unidad(es) de "${productoSel.nombre}" de ${etiquetaBarra(barraActiva)} a ${etiquetaBarra(destino)}.`
           : `Se dieron de baja ${cant} unidad(es) de "${productoSel.nombre}" en ${etiquetaBarra(barraActiva)}.`
       );
       setProductoId("");
@@ -123,7 +112,7 @@ export default function Distribucion() {
   }
 
   const historial = useMemo(
-    () => movimientosBarra.filter((m) => m.barra === barraActiva),
+    () => movimientosBarra.filter((m) => m.barra === barraActiva || m.destino === barraActiva),
     [movimientosBarra, barraActiva]
   );
 
@@ -199,7 +188,7 @@ export default function Distribucion() {
       <form className="formulario" onSubmit={enviar}>
         <p className="texto-vacio">
           {accionActiva === "ingreso" && `Pasa botellas del almacén general a ${etiquetaBarra(barraActiva)}.`}
-          {accionActiva === "traspaso" && `Pasa botellas de ${etiquetaBarra(barraActiva)} a ${etiquetaBarra(otraBarra(barraActiva))}.`}
+          {accionActiva === "traspaso" && `Pasa botellas de ${etiquetaBarra(barraActiva)} a ${etiquetaBarra(destino)}.`}
           {accionActiva === "baja" && `Descuenta botellas de ${etiquetaBarra(barraActiva)} (rotura, derrame, etc.).`}
         </p>
 
@@ -227,6 +216,16 @@ export default function Distribucion() {
               required
             />
           </label>
+          {accionActiva === "traspaso" && (
+            <label>
+              Hacia
+              <select value={destino} onChange={(e) => setDestinoElegido(e.target.value)}>
+                {barrasDestino.map((b) => (
+                  <option key={b.valor} value={b.valor}>{b.etiqueta}</option>
+                ))}
+              </select>
+            </label>
+          )}
           {accionActiva === "baja" && (
             <label>
               Motivo (opcional)
@@ -270,7 +269,10 @@ export default function Distribucion() {
                   <td>{m.producto}</td>
                   <td>{m.cantidad}</td>
                   <td>
-                    {m.tipo === "traspaso" && `Hacia ${etiquetaBarra(m.destino)}`}
+                    {m.tipo === "traspaso" &&
+                      (m.destino === barraActiva && m.barra !== barraActiva
+                        ? `Desde ${etiquetaBarra(m.barra)}`
+                        : `Hacia ${etiquetaBarra(m.destino)}`)}
                     {m.tipo === "baja" && (m.motivo || "—")}
                     {m.tipo === "ingreso" && "Desde almacén"}
                   </td>

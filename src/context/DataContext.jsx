@@ -17,6 +17,7 @@ import {
 import { db, ensureAuth } from "../firebase";
 import { buscarAperturasActivas } from "../utils/Turno";
 import { normalizarNombreEvento, resolverEventoParaApertura } from "../utils/Evento";
+import { BARRAS, campoBarra } from "../utils/barras";
 
 const DataContext = createContext(null);
 
@@ -156,8 +157,7 @@ export function DataProvider({ children }) {
       productos.slice(i, i + TAMANO_LOTE).forEach((p) => {
         lote.update(doc(db, "productos", p.id), {
           stock: 0,
-          stockInterior: 0,
-          stockSemicubierto: 0,
+          ...Object.fromEntries(BARRAS.map((b) => [b.campo, 0])),
         });
       });
       await lote.commit();
@@ -170,8 +170,7 @@ export function DataProvider({ children }) {
   // (por ejemplo 0.0714 de botella por una dosis). Descuenta de la barra donde se
   // vendió; si no hay barra (o es "general") descuenta del almacén general.
   async function descontarStock(consumos, barra) {
-    const campo =
-      barra === "interior" ? "stockInterior" : barra === "semicubierto" ? "stockSemicubierto" : "stock";
+    const campo = campoBarra(barra);
     const porProducto = {};
     consumos.forEach((c) => {
       if (!c.productoId) return;
@@ -220,8 +219,7 @@ export function DataProvider({ children }) {
         if (!snap.exists() || snap.data().anulada) return;
         validas.push(vRefs[i]);
         const v = snap.data();
-        const campo =
-          v.barra === "interior" ? "stockInterior" : v.barra === "semicubierto" ? "stockSemicubierto" : "stock";
+        const campo = campoBarra(v.barra);
         const consumos =
           Array.isArray(v.consumo) && v.consumo.length > 0
             ? v.consumo
@@ -310,26 +308,27 @@ export function DataProvider({ children }) {
   // barras (traspaso), o lo da de baja en una barra (rotura, derrame, etc.).
   // Actualiza el producto (stock general + stock de la barra) y deja un registro
   // en "movimientosBarra" con la fecha para el historial.
-  async function registrarMovimientoBarra({ tipo, barra, productoId, cantidad, motivo }) {
+  async function registrarMovimientoBarra({ tipo, barra, destino: destinoElegido, productoId, cantidad, motivo }) {
     const producto = productos.find((p) => p.id === productoId);
     if (!producto) throw new Error("Producto no encontrado.");
 
-    const campoBarra = barra === "interior" ? "stockInterior" : "stockSemicubierto";
-    const campoOtraBarra = barra === "interior" ? "stockSemicubierto" : "stockInterior";
-    const stockBarraActual = producto[campoBarra] || 0;
+    const campoOrigen = campoBarra(barra);
+    const stockBarraActual = producto[campoOrigen] || 0;
 
     const cambios = {};
     let destino = null;
 
     if (tipo === "ingreso") {
       cambios.stock = Math.max(0, (producto.stock || 0) - cantidad);
-      cambios[campoBarra] = stockBarraActual + cantidad;
+      cambios[campoOrigen] = stockBarraActual + cantidad;
     } else if (tipo === "traspaso") {
-      destino = barra === "interior" ? "semicubierto" : "interior";
-      cambios[campoBarra] = Math.max(0, stockBarraActual - cantidad);
-      cambios[campoOtraBarra] = (producto[campoOtraBarra] || 0) + cantidad;
+      // Hacia la barra elegida; si no se indicó, a la primera barra distinta de la de origen.
+      destino = destinoElegido && destinoElegido !== barra ? destinoElegido : BARRAS.find((b) => b.valor !== barra)?.valor;
+      const campoDestino = campoBarra(destino);
+      cambios[campoOrigen] = Math.max(0, stockBarraActual - cantidad);
+      cambios[campoDestino] = (producto[campoDestino] || 0) + cantidad;
     } else if (tipo === "baja") {
-      cambios[campoBarra] = Math.max(0, stockBarraActual - cantidad);
+      cambios[campoOrigen] = Math.max(0, stockBarraActual - cantidad);
     }
 
     await actualizarProducto(productoId, cambios);
@@ -351,8 +350,7 @@ export function DataProvider({ children }) {
   // existe le suma la cantidad al destino elegido. Además deja un registro en
   // "comprasInventario" con la factura para poder buscarlo después.
   async function registrarCompra({ productoExistenteId, datosProducto, destino, cantidad, factura }) {
-    const campo =
-      destino === "interior" ? "stockInterior" : destino === "semicubierto" ? "stockSemicubierto" : "stock";
+    const campo = campoBarra(destino);
 
     let productoId = productoExistenteId;
     let nombreProducto = datosProducto.nombre;
@@ -368,8 +366,7 @@ export function DataProvider({ children }) {
       const nuevo = await addDoc(collection(db, "productos"), {
         ...datosProducto,
         stock: 0,
-        stockInterior: 0,
-        stockSemicubierto: 0,
+        ...Object.fromEntries(BARRAS.map((b) => [b.campo, 0])),
         [campo]: cantidad,
         creadoEn: serverTimestamp(),
       });

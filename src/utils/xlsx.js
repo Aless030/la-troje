@@ -1,3 +1,5 @@
+import { etiquetaBarra } from "./barras";
+
 // Descargas en Excel (.xlsx). Se carga la librería solo cuando se pide la descarga,
 // así la app no pesa más al abrir.
 
@@ -43,7 +45,7 @@ export async function descargarReporteCierreXLSX(c) {
     [],
     ["Evento", c.evento || "-"],
     ["Cajera", c.cajera || "-"],
-    ["Barra", c.barra || "-"],
+    ["Barra", etiquetaBarra(c.barra)],
     ["Apertura", c.fechaApertura ? new Date(c.fechaApertura).toLocaleString("es-BO") : "-"],
     ["Cierre", new Date(c.fecha).toLocaleString("es-BO")],
     ["Meseros", (c.meseros || []).join(", ") || "-"],

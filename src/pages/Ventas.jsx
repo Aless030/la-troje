@@ -8,19 +8,12 @@ import { consumoReceta, dosisPorBotella, formatearStock, redondear4, tragosDispo
 import {
   eventoDeApertura, eventoDeRegistro, listarEventos, mapaAperturas, nombresEventosRecientes,
 } from "../utils/Evento";
+import { BARRAS, campoBarra } from "../utils/barras";
 
 function fechaHoyISO() {
   return new Date().toISOString();
 }
 
-const BARRAS = [
-  { valor: "interior", etiqueta: "Interior" },
-  { valor: "semicubierto", etiqueta: "Semicubierto" },
-];
-
-function campoBarra(barra) {
-  return barra === "interior" ? "stockInterior" : "stockSemicubierto";
-}
 
 const VACIO = {
   cajera: "",
@@ -465,6 +458,12 @@ export default function Ventas() {
     setPrecioEditado("");
   }
 
+  // Al terminar de abrir una caja se propone la siguiente barra que todavía no tiene caja abierta.
+  function siguienteBarraLibre(actual) {
+    const ocupadas = new Set([...aperturasActivas.map((a) => a.barra), actual]);
+    return (BARRAS.find((b) => !ocupadas.has(b.valor)) || BARRAS.find((b) => b.valor !== actual) || BARRAS[0]).valor;
+  }
+
   function cambiarBarra(barra) {
     setForm((f) => ({ ...f, barra, productoId: "" }));
   }
@@ -509,7 +508,7 @@ export default function Ventas() {
       if (nuevaId) setAperturaIdElegida(nuevaId);
       setAbriendoOtra(false);
       // Se conserva el evento para abrir la otra barra del mismo evento sin volver a escribirlo.
-      setAperturaForm({ cajera: "", cajaChica: "", barra: aperturaForm.barra === "interior" ? "semicubierto" : "interior", meseros: "", evento });
+      setAperturaForm({ cajera: "", cajaChica: "", barra: siguienteBarraLibre(aperturaForm.barra), meseros: "", evento });
     } catch (err) {
       console.error(err);
       setMensajeApertura(String(err?.message || "").startsWith("Ya hay") ? err.message : "No se pudo abrir la caja.");

@@ -6,6 +6,7 @@ import { descargarCSV } from "../utils/csv";
 import { descargarPDF } from "../utils/pdf";
 import { descargarXLSX } from "../utils/xlsx";
 import { eventoDeRegistro, listarEventos, mapaAperturas, nombreArchivoEvento } from "../utils/Evento";
+import { BARRAS, etiquetaBarra, stockTotal } from "../utils/barras";
 
 const TODOS = "todos";
 const FAMILIA_TRAGOS = "Tragos"; // los tragos del recetario no son un producto de inventario
@@ -119,6 +120,21 @@ export default function Reportes() {
     return Object.values(mapa).sort((a, b) => b.total - a.total);
   }, [ventasPagadas]);
 
+  // Ventas por barra (Interior, Semicubierto, Palmera): cuánto vendió cada una y cómo se pagó.
+  const porBarra = useMemo(() => {
+    const mapa = Object.fromEntries(BARRAS.map((b) => [b.valor, { barra: b.etiqueta, ventas: 0, efectivo: 0, qr: 0, total: 0 }]));
+    ventasPagadas.forEach((v) => {
+      const k = v.barra || "sin-barra";
+      if (!mapa[k]) mapa[k] = { barra: etiquetaBarra(v.barra) === "—" ? "Sin barra" : etiquetaBarra(v.barra), ventas: 0, efectivo: 0, qr: 0, total: 0 };
+      mapa[k].ventas += 1;
+      mapa[k].efectivo += Number(v.montoEfectivo || 0);
+      mapa[k].qr += Number(v.montoQr || 0);
+      mapa[k].total += Number(v.total || 0);
+    });
+    const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    return Object.values(mapa).map((f) => ({ ...f, efectivo: r2(f.efectivo), qr: r2(f.qr), total: r2(f.total) }));
+  }, [ventasPagadas]);
+
   const porProducto = useMemo(() => {
     const mapa = {};
     ventasPagadas.forEach((v) => {
@@ -138,9 +154,7 @@ export default function Reportes() {
           existencia: v.recetaId
             ? "—"
             : productoInventario
-            ? Number(productoInventario.stock || 0) +
-              Number(productoInventario.stockInterior || 0) +
-              Number(productoInventario.stockSemicubierto || 0)
+            ? stockTotal(productoInventario)
             : 0,
           total: 0,
         };
@@ -167,28 +181,22 @@ export default function Reportes() {
       .map((p) => {
       const precio = Number(p.precio) || 0;
       const stockAlmacen = p.stock ?? 0;
-      const stockInterior = p.stockInterior ?? 0;
-      const stockSemicubierto = p.stockSemicubierto ?? 0;
-      return {
-        producto: p.nombre,
-        almacen: stockAlmacen,
-        interior: stockInterior,
-        semicubierto: stockSemicubierto,
-        valorAlmacen: stockAlmacen * precio,
-        valorInterior: stockInterior * precio,
-        valorSemicubierto: stockSemicubierto * precio,
-        valorTotal: (stockAlmacen + stockInterior + stockSemicubierto) * precio,
-      };
+      const fila = { producto: p.nombre, almacen: stockAlmacen, valorAlmacen: stockAlmacen * precio, valorTotal: stockTotal(p) * precio };
+      BARRAS.forEach((b) => {
+        const existencia = p[b.campo] ?? 0;
+        fila[b.valor] = existencia;
+        fila[`valor_${b.valor}`] = existencia * precio;
+      });
+      return fila;
     });
-    const totales = filas.reduce(
-      (acc, f) => ({
-        almacen: acc.almacen + f.valorAlmacen,
-        interior: acc.interior + f.valorInterior,
-        semicubierto: acc.semicubierto + f.valorSemicubierto,
-        total: acc.total + f.valorTotal,
-      }),
-      { almacen: 0, interior: 0, semicubierto: 0, total: 0 }
-    );
+    const totales = { almacen: 0, total: 0, ...Object.fromEntries(BARRAS.map((b) => [b.valor, 0])) };
+    filas.forEach((f) => {
+      totales.almacen += f.valorAlmacen;
+      totales.total += f.valorTotal;
+      BARRAS.forEach((b) => {
+        totales[b.valor] += f[`valor_${b.valor}`];
+      });
+    });
     return { filas: filas.sort((a, b) => b.valorTotal - a.valorTotal), totales };
   }, [productos, familiaActiva]);
 
@@ -203,7 +211,7 @@ export default function Reportes() {
         n: i + 1,
         comanda: v.comanda || "—",
         fecha: new Date(v.fecha).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-        barra: v.barra === "interior" ? "Interior" : v.barra === "semicubierto" ? "Semicubierto" : v.barra || "—",
+        barra: etiquetaBarra(v.barra),
         mesero: v.mesero || "—",
         producto: v.producto,
         unidad: v.unidad || "—",
@@ -329,6 +337,17 @@ export default function Reportes() {
       ],
       filas: porMesero,
     },
+    barra: {
+      titulo: "Por barra",
+      columnas: [
+        { titulo: "Barra", clave: "barra" },
+        { titulo: "N° ventas", clave: "ventas" },
+        { titulo: "Efectivo Bs", clave: "efectivo" },
+        { titulo: "QR Bs", clave: "qr" },
+        { titulo: "Total Bs", clave: "total" },
+      ],
+      filas: porBarra,
+    },
     producto: {
       titulo: "Por producto",
       columnas: [
@@ -383,9 +402,13 @@ export default function Reportes() {
       total: f.total?.toFixed ? f.total.toFixed(2) : f.total,
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
+      efectivo: f.efectivo?.toFixed ? f.efectivo.toFixed(2) : f.efectivo,
+      qr: f.qr?.toFixed ? f.qr.toFixed(2) : f.qr,
     }));
     const suma = (k) => actual.filas.reduce((a, f) => a + Number(f[k] || 0), 0);
     if (vista === "mesero") base.push({ mesero: "TOTAL", ventas: suma("ventas"), total: suma("total").toFixed(2) });
+    if (vista === "barra")
+      base.push({ barra: "TOTAL", ventas: suma("ventas"), efectivo: suma("efectivo").toFixed(2), qr: suma("qr").toFixed(2), total: suma("total").toFixed(2) });
     if (vista === "producto") base.push({ producto: "TOTAL", cantidad: suma("cantidad"), total: suma("total").toFixed(2) });
     if (vista === "comandas") base.push({ producto: "TOTAL VENDIDO", cantidad: actual.filas.filter((f) => f.estado === "Vendida").reduce((a, f) => a + Number(f.cantidad || 0), 0), total: suma("total").toFixed(2) });
     return base;
@@ -476,8 +499,7 @@ export default function Reportes() {
   const columnasInventario = [
     { titulo: "Producto", clave: "producto" },
     { titulo: "Almacén", clave: "almacen" },
-    { titulo: "Interior", clave: "interior" },
-    { titulo: "Semicubierto", clave: "semicubierto" },
+    ...BARRAS.map((b) => ({ titulo: b.etiqueta, clave: b.valor })),
     { titulo: "Valor total Bs", clave: "valorTotal" },
   ];
 
@@ -555,6 +577,12 @@ export default function Reportes() {
           onClick={() => setVista("mesero")}
         >
           Por mesero
+        </button>
+        <button
+          className={`pestañas__item ${vista === "barra" ? "pestañas__item--activa" : ""}`}
+          onClick={() => setVista("barra")}
+        >
+          Por barra
         </button>
         <button
           className={`pestañas__item ${vista === "producto" ? "pestañas__item--activa" : ""}`}
@@ -713,14 +741,12 @@ export default function Reportes() {
               <span className="tarjeta-metrica__etiqueta">Almacén general</span>
               <span className="tarjeta-metrica__valor">Bs {inventarioPorBarra.totales.almacen.toFixed(2)}</span>
             </div>
-            <div className="tarjeta-metrica">
-              <span className="tarjeta-metrica__etiqueta">Interior</span>
-              <span className="tarjeta-metrica__valor">Bs {inventarioPorBarra.totales.interior.toFixed(2)}</span>
-            </div>
-            <div className="tarjeta-metrica">
-              <span className="tarjeta-metrica__etiqueta">Semicubierto</span>
-              <span className="tarjeta-metrica__valor">Bs {inventarioPorBarra.totales.semicubierto.toFixed(2)}</span>
-            </div>
+            {BARRAS.map((b) => (
+              <div className="tarjeta-metrica" key={b.valor}>
+                <span className="tarjeta-metrica__etiqueta">{b.etiqueta}</span>
+                <span className="tarjeta-metrica__valor">Bs {inventarioPorBarra.totales[b.valor].toFixed(2)}</span>
+              </div>
+            ))}
             <div className="tarjeta-metrica tarjeta-metrica--destacada">
               <span className="tarjeta-metrica__etiqueta">Valor total del inventario</span>
               <span className="tarjeta-metrica__valor">Bs {inventarioPorBarra.totales.total.toFixed(2)}</span>
@@ -736,8 +762,9 @@ export default function Reportes() {
                   <tr>
                     <th>Producto</th>
                     <th>Almacén</th>
-                    <th>Interior</th>
-                    <th>Semicubierto</th>
+                    {BARRAS.map((b) => (
+                      <th key={b.valor}>{b.etiqueta}</th>
+                    ))}
                     <th>Valor total</th>
                   </tr>
                 </thead>
@@ -746,8 +773,9 @@ export default function Reportes() {
                     <tr key={i}>
                       <td>{f.producto}</td>
                       <td>{f.almacen}</td>
-                      <td>{f.interior}</td>
-                      <td>{f.semicubierto}</td>
+                      {BARRAS.map((b) => (
+                        <td key={b.valor}>{f[b.valor]}</td>
+                      ))}
                       <td>Bs {f.valorTotal.toFixed(2)}</td>
                     </tr>
                   ))}

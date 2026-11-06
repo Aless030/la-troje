@@ -1,3 +1,4 @@
+import { etiquetaBarra } from "./barras";
 import { jsPDF } from "jspdf";
 
 // Tabla simple en PDF. Horizontal si hay muchas columnas, el texto largo se parte en líneas
@@ -170,7 +171,7 @@ export function descargarReporteCierrePDF(c) {
     doc.text(`Evento: ${c.evento}`, margen, y);
     y += 14;
   }
-  doc.text(`Cajera: ${c.cajera || "-"}    Barra: ${c.barra || "-"}`, margen, y);
+  doc.text(`Cajera: ${c.cajera || "-"}    Barra: ${etiquetaBarra(c.barra)}`, margen, y);
   y += 14;
   doc.text(
     `Apertura: ${c.fechaApertura ? new Date(c.fechaApertura).toLocaleString("es-BO") : "-"}    Cierre: ${new Date(c.fecha).toLocaleString("es-BO")}`,

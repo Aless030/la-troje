@@ -1,3 +1,4 @@
+import { etiquetaBarra } from "../utils/barras";
 import { descargarReporteCierrePDF } from "../utils/pdf";
 import { descargarReporteCierreXLSX } from "../utils/xlsx";
 
@@ -20,7 +21,7 @@ export default function ReporteCierre({ cierre, titulo = "Reporte de cierre de c
             <strong>Evento:</strong> {cierre.evento} ·{" "}
           </>
         )}
-        <strong>Cajera:</strong> {cierre.cajera || "—"} · <strong>Barra:</strong> {cierre.barra || "—"} ·{" "}
+        <strong>Cajera:</strong> {cierre.cajera || "—"} · <strong>Barra:</strong> {etiquetaBarra(cierre.barra)} ·{" "}
         <strong>Apertura:</strong>{" "}
         {cierre.fechaApertura ? new Date(cierre.fechaApertura).toLocaleString("es-BO") : "—"}
         {cierre.fecha && cierre.cerrado !== false && (
