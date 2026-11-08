@@ -49,7 +49,8 @@ const pctTxt = (n) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(0)}%`;
 function Delta({ actual, anterior }) {
   if (!(anterior > 0)) return null;
   const d = ((actual - anterior) / anterior) * 100;
-  return <span className={`dash-delta ${d >= 0 ? "dash-delta--sube" : "dash-delta--baja"}`}>{d >= 0 ? "▲" : "▼"} {pctTxt(d)} vs evento anterior</span>;
+  const texto = d > 300 ? `${(actual / anterior).toFixed(1).replace(".", ",")} veces` : pctTxt(d);
+  return <span className={`dash-delta ${d >= 0 ? "dash-delta--sube" : "dash-delta--baja"}`}>{d >= 0 ? "▲" : "▼"} {texto} vs evento anterior</span>;
 }
 
 // Iconos simples (SVG) para las tarjetas.
@@ -311,13 +312,17 @@ export default function DashboardPage() {
   // Frases automáticas con lo más destacado.
   const destacados = [];
   if (datos.totalVentas > 0) {
-    if (totalesAnterior && totalesAnterior.ingresos > 0) {
-      const d = ((datos.totalIngresos - totalesAnterior.ingresos) / totalesAnterior.ingresos) * 100;
-      destacados.push(`Se vendió ${Math.abs(d).toFixed(0)}% ${d >= 0 ? "más" : "menos"} que en el evento anterior.`);
+    if (eventoActual && anterior && totalesAnterior && totalesAnterior.ingresos > 0) {
+      const ratio = datos.totalIngresos / totalesAnterior.ingresos;
+      const comp = ratio >= 3 ? `${ratio.toFixed(1).replace(".", ",")} veces lo del evento anterior` : ratio >= 1 ? `${((ratio - 1) * 100).toFixed(0)}% más que el evento anterior` : `${((1 - ratio) * 100).toFixed(0)}% menos que el evento anterior`;
+      destacados.push(`Se vendió ${bs(datos.totalIngresos)}: ${comp} (${bs(totalesAnterior.ingresos)}).`);
+    } else {
+      destacados.push(`Se vendió ${bs(datos.totalIngresos)} en ${datos.comandas} comandas.`);
     }
-    if (datos.horaPico) destacados.push(`La hora pico fue a las ${datos.horaPico.hora} (${bs(datos.horaPico.total)}).`);
-    if (datos.rentables[0]) destacados.push(`El producto que más ganancia dejó: ${datos.rentables[0].producto} (${bs(datos.rentables[0].ganancia)}).`);
-    if (datos.meseroTop) destacados.push(`Mejor mesero: ${datos.meseroTop.mesero} con ${bs(datos.meseroTop.total)}.`);
+    destacados.push(`Ganancia: ${bs(datos.bruta)} (de cada Bs 100 vendidos, Bs ${datos.margen.toFixed(0)} son ganancia).`);
+    if (datos.horaPico) destacados.push(`Más movimiento a las ${datos.horaPico.hora}: se vendió ${bs(datos.horaPico.total)} en esa hora.`);
+    if (datos.rentables[0]) destacados.push(`Lo que más ganancia dejó: ${datos.rentables[0].producto} (${bs(datos.rentables[0].ganancia)}).`);
+    if (datos.meseroTop) destacados.push(`Mesero que más vendió: ${datos.meseroTop.mesero} (${bs(datos.meseroTop.total)}).`);
   }
 
   return (
@@ -351,7 +356,7 @@ export default function DashboardPage() {
 
       {destacados.length > 0 && (
         <section className="dash-destacados">
-          <h2>Lo más destacado</h2>
+          <h2>Resumen en palabras</h2>
           <ul>
             {destacados.map((t) => (
               <li key={t}>{t}</li>
@@ -360,23 +365,24 @@ export default function DashboardPage() {
         </section>
       )}
 
+      <h3 className="dash__seccion">Cómo va el negocio</h3>
       <div className="dash__kpis">
         <Tarjeta
           oscura
           tipo="ingresos"
           color={AZUL}
-          etiqueta="Ingresos totales"
+          etiqueta="Ventas"
           valor={bs(datos.totalIngresos)}
           extra={eventoActual && totalesAnterior ? <Delta actual={datos.totalIngresos} anterior={totalesAnterior.ingresos} /> : null}
         />
         <Tarjeta
           tipo="ganancia"
           color={VERDE}
-          etiqueta="Ganancia bruta (ventas − costo)"
+          etiqueta="Ganancia bruta"
           valor={bs(datos.bruta)}
           extra={
             <span className="dash-kpi__nota">
-              Margen {datos.margen.toFixed(0)}%
+              Ventas − costo de producto · {datos.margen.toFixed(0)}%
               {eventoActual && totalesAnterior ? <Delta actual={datos.bruta} anterior={totalesAnterior.ingresos - totalesAnterior.costo} /> : null}
             </span>
           }
@@ -384,26 +390,27 @@ export default function DashboardPage() {
         <Tarjeta
           tipo="ganancia"
           color={AMBAR}
-          etiqueta="Ganancia neta (− gastos de caja)"
+          etiqueta="Ganancia neta"
           valor={bs(datos.neta)}
-          extra={<span className="dash-kpi__nota">Gastos de caja: {bs(datos.gastosTotal)}</span>}
+          extra={<span className="dash-kpi__nota">Ganancia bruta − gastos de caja ({bs(datos.gastosTotal)})</span>}
         />
         <Tarjeta
           tipo="ventas"
           color={VIOLETA}
-          etiqueta="Ticket promedio por comanda"
+          etiqueta="Gasto promedio por comanda"
           valor={bs(datos.ticket)}
           extra={<span className="dash-kpi__nota">{datos.comandas} comandas · {datos.totalVentas} productos</span>}
         />
       </div>
 
       <div className="dash__kpis">
-        <Tarjeta tipo="estrella" color={AMBAR} etiqueta="Producto estrella" valor={datos.masVendido?.producto || "—"} texto />
-        <Tarjeta tipo="mesero" color={VIOLETA} etiqueta="Mesero del período" valor={datos.meseroTop ? datos.meseroTop.mesero : "—"} texto />
-        <Tarjeta tipo="reloj" color={ROSA} etiqueta="Hora pico" valor={datos.horaPico ? datos.horaPico.hora : "—"} texto />
-        <Tarjeta tipo="baja" color={ROSA} etiqueta="Producto de menor rotación" valor={datos.menosVendido?.producto || "—"} texto />
+        <Tarjeta tipo="estrella" color={AMBAR} etiqueta="Más vendido" valor={datos.masVendido?.producto || "—"} texto />
+        <Tarjeta tipo="mesero" color={VIOLETA} etiqueta="Mesero que más vendió" valor={datos.meseroTop ? datos.meseroTop.mesero : "—"} texto />
+        <Tarjeta tipo="reloj" color={ROSA} etiqueta="Hora con más ventas" valor={datos.horaPico ? datos.horaPico.hora : "—"} texto />
+        <Tarjeta tipo="baja" color={ROSA} etiqueta="Menos vendido" valor={datos.menosVendido?.producto || "—"} texto />
       </div>
 
+      <h3 className="dash__seccion">Cuándo y dónde se vende</h3>
       <div className="dash__graficos">
         <section className="dash-panel">
           <div className="dash-panel__titulo">
@@ -428,13 +435,13 @@ export default function DashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
-          <p className="dash-panel__pie">Azul = ventas · Verde = ganancia bruta. El evento elegido está en azul fuerte.</p>
+          <p className="dash-panel__pie">Barra azul = lo vendido. Barra verde = ganancia. El evento que estás mirando está en azul fuerte.</p>
         </section>
 
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Ventas por hora</h2>
-            <span>¿Cuándo se vende más?</span>
+            <span>Hora por hora</span>
           </div>
           {datos.horas.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
@@ -456,11 +463,12 @@ export default function DashboardPage() {
         </section>
       </div>
 
+      <h3 className="dash__seccion">Qué se vende y qué deja ganancia</h3>
       <div className="dash__graficos dash__graficos--iguales">
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Ventas por barra</h2>
-            <span>Interior · Semicubierto · Palmera</span>
+            <span>Cuánto vendió cada barra</span>
           </div>
           {datos.totalVentas === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
@@ -483,7 +491,7 @@ export default function DashboardPage() {
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Lo que más ganancia deja</h2>
-            <span>Top 5 por ganancia</span>
+            <span>Los 5 que más dejan</span>
           </div>
           {datos.rentables.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
@@ -496,7 +504,7 @@ export default function DashboardPage() {
                     <span className="dash-rank__valor">{bs(r.ganancia)}</span>
                   </div>
                   <div className="dash-rank__pista"><div className="dash-rank__barra" style={{ width: `${(Math.max(0, r.ganancia) / maxRent) * 100}%`, background: VERDE }} /></div>
-                  <span className="dash-rank__nota">Margen {r.total > 0 ? ((r.ganancia / r.total) * 100).toFixed(0) : 0}% · {r.cantidad} vendidos</span>
+                  <span className="dash-rank__nota">{r.cantidad} vendidos · ganancia {r.total > 0 ? ((r.ganancia / r.total) * 100).toFixed(0) : 0}% del precio</span>
                 </li>
               ))}
             </ul>
@@ -508,7 +516,7 @@ export default function DashboardPage() {
         <section className="dash-panel dash-panel--ancho">
           <div className="dash-panel__titulo">
             <h2>Top 5 productos</h2>
-            <span>Por cantidad vendida</span>
+            <span>Cuántas unidades se vendieron</span>
           </div>
           {datos.top5.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
@@ -570,11 +578,12 @@ export default function DashboardPage() {
         </section>
       </div>
 
+      <h3 className="dash__seccion">Equipo y familias</h3>
       <div className="dash__graficos dash__graficos--iguales">
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Ranking de meseros</h2>
-            <span>Total vendido y ticket promedio</span>
+            <span>Quién vendió más</span>
           </div>
           {datos.meseros.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
@@ -587,7 +596,7 @@ export default function DashboardPage() {
                     <span className="dash-rank__valor">{bs(m.total)}</span>
                   </div>
                   <div className="dash-rank__pista"><div className="dash-rank__barra" style={{ width: `${(m.total / maxMesero) * 100}%`, background: VIOLETA }} /></div>
-                  <span className="dash-rank__nota">{m.comandas} comandas · ticket {bs(m.ticket)}</span>
+                  <span className="dash-rank__nota">{m.comandas} comandas · promedio {bs(m.ticket)} cada una</span>
                 </li>
               ))}
             </ul>
@@ -597,14 +606,14 @@ export default function DashboardPage() {
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Por familia</h2>
-            <span>Ventas y margen</span>
+            <span>Qué grupo vende más</span>
           </div>
           {datos.familias.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
           ) : (
             <table className="dash-tabla">
               <thead>
-                <tr><th>Familia</th><th>Vendido</th><th>% </th><th>Margen</th></tr>
+                <tr><th>Familia</th><th>Vendido</th><th>Del total</th><th>Ganancia</th></tr>
               </thead>
               <tbody>
                 {datos.familias.map((f) => (
@@ -621,11 +630,12 @@ export default function DashboardPage() {
         </section>
       </div>
 
+      <h3 className="dash__seccion">Días y control</h3>
       <div className="dash__graficos dash__graficos--iguales">
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>¿Qué día rinde más?</h2>
-            <span>Promedio por evento</span>
+            <span>Venta promedio por evento</span>
           </div>
           {porDia.length === 0 ? (
             <p className="dash__vacio">Todavía no hay eventos con ventas.</p>
@@ -651,14 +661,14 @@ export default function DashboardPage() {
 
         <section className="dash-panel">
           <div className="dash-panel__titulo">
-            <h2>Control y alertas</h2>
-            <span>{eventoActual ? "De este evento" : "Histórico"}</span>
+            <h2>Control</h2>
+            <span>{eventoActual ? "En este evento" : "En todo el histórico"}</span>
           </div>
           <ul className="dash-alertas">
             <li className={control.cortesias > 0 ? "dash-alertas__aviso" : ""}>
               <span>Cortesías entregadas</span>
               <strong>{control.cortesias}</strong>
-              <small>Valor a precio: {bs(control.valorCortesias)} · costo real: {bs(control.costoCortesias)}</small>
+              <small>Valían {bs(control.valorCortesias)}; costaron {bs(control.costoCortesias)}</small>
             </li>
             <li className={control.anuladas > 0 ? "dash-alertas__aviso" : ""}>
               <span>Comandas anuladas</span>
@@ -668,20 +678,21 @@ export default function DashboardPage() {
             <li className={inv.agotados > 0 ? "dash-alertas__aviso" : ""}>
               <span>Productos sin stock</span>
               <strong>{inv.agotados}</strong>
-              <small>{inv.pocos} con poco stock (inventario actual)</small>
+              <small>{inv.pocos} con poco stock (inventario de hoy)</small>
             </li>
           </ul>
         </section>
       </div>
 
+      <h3 className="dash__seccion">Inventario actual</h3>
       <div className="dash__kpis dash__kpis--dos">
-        <Tarjeta tipo="inventario" color={VERDE} etiqueta="Inventario a costo (almacén + barras)" valor={bs(inv.costoInv)} />
+        <Tarjeta tipo="inventario" color={VERDE} etiqueta="Inventario hoy, a precio de compra" valor={bs(inv.costoInv)} />
         <Tarjeta
           tipo="inventario"
           color={AZUL}
-          etiqueta="Inventario a precio de venta (potencial)"
+          etiqueta="Inventario hoy, a precio de venta"
           valor={bs(inv.ventaInv)}
-          extra={<span className="dash-kpi__nota">Ganancia potencial: {bs(inv.ventaInv - inv.costoInv)}</span>}
+          extra={<span className="dash-kpi__nota">Si se vende todo, ganarías: {bs(inv.ventaInv - inv.costoInv)}</span>}
         />
       </div>
     </div>
