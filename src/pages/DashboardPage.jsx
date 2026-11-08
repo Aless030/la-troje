@@ -43,15 +43,7 @@ const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "
 const FAMILIA_TRAGOS = "Tragos";
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const horaTxt = (h) => `${String(h).padStart(2, "0")}:00`;
-const pctTxt = (n) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(0)}%`;
-
-// Pastilla de comparación ("+12% vs evento anterior").
-function Delta({ actual, anterior }) {
-  if (!(anterior > 0)) return null;
-  const d = ((actual - anterior) / anterior) * 100;
-  const texto = d > 300 ? `${(actual / anterior).toFixed(1).replace(".", ",")} veces` : pctTxt(d);
-  return <span className={`dash-delta ${d >= 0 ? "dash-delta--sube" : "dash-delta--baja"}`}>{d >= 0 ? "▲" : "▼"} {texto} vs evento anterior</span>;
-}
+const rangoHora = (h) => `${horaTxt(h)} a ${horaTxt((h + 1) % 24)}`;
 
 // Iconos simples (SVG) para las tarjetas.
 const Icono = ({ tipo }) => {
@@ -305,25 +297,10 @@ export default function DashboardPage() {
   ];
   const sumaPagos = datos.totalEfectivo + datos.totalQr;
   const pct = (v) => (sumaPagos > 0 ? ((v / sumaPagos) * 100).toFixed(0) : 0);
+  const maxHora = Math.max(1, ...datos.horas.map((h) => h.total));
   const maxBarra = Math.max(1, ...datos.barras.map((b) => b.total));
   const maxRent = Math.max(1, ...datos.rentables.map((r) => Math.abs(r.ganancia)));
   const maxMesero = Math.max(1, ...datos.meseros.map((m) => m.total));
-
-  // Frases automáticas con lo más destacado.
-  const destacados = [];
-  if (datos.totalVentas > 0) {
-    if (eventoActual && anterior && totalesAnterior && totalesAnterior.ingresos > 0) {
-      const ratio = datos.totalIngresos / totalesAnterior.ingresos;
-      const comp = ratio >= 3 ? `${ratio.toFixed(1).replace(".", ",")} veces lo del evento anterior` : ratio >= 1 ? `${((ratio - 1) * 100).toFixed(0)}% más que el evento anterior` : `${((1 - ratio) * 100).toFixed(0)}% menos que el evento anterior`;
-      destacados.push(`Se vendió ${bs(datos.totalIngresos)}: ${comp} (${bs(totalesAnterior.ingresos)}).`);
-    } else {
-      destacados.push(`Se vendió ${bs(datos.totalIngresos)} en ${datos.comandas} comandas.`);
-    }
-    destacados.push(`Ganancia: ${bs(datos.bruta)} (de cada Bs 100 vendidos, Bs ${datos.margen.toFixed(0)} son ganancia).`);
-    if (datos.horaPico) destacados.push(`Más movimiento a las ${datos.horaPico.hora}: se vendió ${bs(datos.horaPico.total)} en esa hora.`);
-    if (datos.rentables[0]) destacados.push(`Lo que más ganancia dejó: ${datos.rentables[0].producto} (${bs(datos.rentables[0].ganancia)}).`);
-    if (datos.meseroTop) destacados.push(`Mesero que más vendió: ${datos.meseroTop.mesero} (${bs(datos.meseroTop.total)}).`);
-  }
 
   return (
     <div className="pagina dash">
@@ -354,17 +331,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {destacados.length > 0 && (
-        <section className="dash-destacados">
-          <h2>Resumen en palabras</h2>
-          <ul>
-            {destacados.map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       <h3 className="dash__seccion">Cómo va el negocio</h3>
       <div className="dash__kpis">
         <Tarjeta
@@ -373,7 +339,6 @@ export default function DashboardPage() {
           color={AZUL}
           etiqueta="Ventas"
           valor={bs(datos.totalIngresos)}
-          extra={eventoActual && totalesAnterior ? <Delta actual={datos.totalIngresos} anterior={totalesAnterior.ingresos} /> : null}
         />
         <Tarjeta
           tipo="ganancia"
@@ -383,7 +348,6 @@ export default function DashboardPage() {
           extra={
             <span className="dash-kpi__nota">
               Ventas − costo de producto · {datos.margen.toFixed(0)}%
-              {eventoActual && totalesAnterior ? <Delta actual={datos.bruta} anterior={totalesAnterior.ingresos - totalesAnterior.costo} /> : null}
             </span>
           }
         />
@@ -406,7 +370,7 @@ export default function DashboardPage() {
       <div className="dash__kpis">
         <Tarjeta tipo="estrella" color={AMBAR} etiqueta="Más vendido" valor={datos.masVendido?.producto || "—"} texto />
         <Tarjeta tipo="mesero" color={VIOLETA} etiqueta="Mesero que más vendió" valor={datos.meseroTop ? datos.meseroTop.mesero : "—"} texto />
-        <Tarjeta tipo="reloj" color={ROSA} etiqueta="Hora con más ventas" valor={datos.horaPico ? datos.horaPico.hora : "—"} texto />
+        <Tarjeta tipo="reloj" color={ROSA} etiqueta="Hora con más ventas" valor={datos.horaPico ? rangoHora(datos.horaPico.h) : "—"} texto />
         <Tarjeta tipo="baja" color={ROSA} etiqueta="Menos vendido" valor={datos.menosVendido?.producto || "—"} texto />
       </div>
 
@@ -441,24 +405,20 @@ export default function DashboardPage() {
         <section className="dash-panel">
           <div className="dash-panel__titulo">
             <h2>Ventas por hora</h2>
-            <span>Hora por hora</span>
+            <span>La hora con más ventas está marcada</span>
           </div>
           {datos.horas.length === 0 ? (
             <p className="dash__vacio">No hay ventas en este período.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={datos.horas} margin={{ top: 8, right: 8, left: movil ? -14 : 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                <XAxis dataKey="hora" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} interval={0} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} width={movil ? 44 : 56} />
-                <Tooltip cursor={{ fill: "rgba(224,160,48,0.12)" }} contentStyle={estiloTooltip} itemStyle={{ color: "#fff" }} labelStyle={{ color: "#9CA3AF" }} formatter={(v) => [bs(v), "Vendido"]} />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-                  {datos.horas.map((h) => (
-                    <Cell key={h.h} fill={h.h === datos.horaPico?.h ? AMBAR : "#F1D9A6"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <ul className="dash-horas">
+              {datos.horas.map((h) => (
+                <li key={h.h} className={h.h === datos.horaPico?.h ? "dash-horas__pico" : ""}>
+                  <span className="dash-horas__hora">{rangoHora(h.h)}</span>
+                  <div className="dash-horas__pista"><div className="dash-horas__barra" style={{ width: `${(h.total / maxHora) * 100}%` }} /></div>
+                  <span className="dash-horas__monto">{bs(h.total)}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>

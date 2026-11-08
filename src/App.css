@@ -2197,3 +2197,15 @@ input[type="time"] {
 .dash-tabla { font-size: 14px; }
 .dash-alertas li small { font-size: 12.5px; }
 @media (max-width: 560px) { .dash-panel { padding: 16px 14px 12px; } .dash-destacados li { font-size: 14px; } }
+
+/* Ventas por hora (lista) */
+.dash-horas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dash-horas li { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13.5px; padding: 4px 8px; border-radius: 8px; }
+.dash-horas__hora { color: #475569; font-weight: 600; white-space: nowrap; }
+.dash-horas__pista { height: 12px; background: #EEF2F7; border-radius: 999px; overflow: hidden; }
+.dash-horas__barra { height: 100%; background: #F1D9A6; border-radius: 999px; }
+.dash-horas__monto { font-weight: 700; white-space: nowrap; color: #1F2937; }
+.dash-horas__pico { background: #FFF6E5; }
+.dash-horas__pico .dash-horas__barra { background: #E0A030; }
+.dash-horas__pico .dash-horas__hora::after { content: " ★"; color: #E0A030; }
+@media (max-width: 560px) { .dash-horas li { grid-template-columns: 96px minmax(0, 1fr) auto; gap: 8px; font-size: 12.5px; } }
