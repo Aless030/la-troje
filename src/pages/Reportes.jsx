@@ -8,6 +8,9 @@ import { descargarXLSX } from "../utils/xlsx";
 import { eventoDeRegistro, listarEventos, mapaAperturas, nombreArchivoEvento } from "../utils/Evento";
 import { BARRAS, etiquetaBarra, stockTotal } from "../utils/barras";
 
+// Redondea para no mostrar 2.9999999 por las fracciones de botella.
+const redondear = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
 const TODOS = "todos";
 const FAMILIA_TRAGOS = "Tragos"; // los tragos del recetario no son un producto de inventario
 
@@ -22,6 +25,8 @@ export default function Reportes() {
   const [vista, setVista] = useState("mesero");
   // Filtro por familia (Licores, Cervezas, Comida, Tragos…). TODOS = sin filtro.
   const [familia, setFamilia] = useState(TODOS);
+  // Filtro por barra (Interior, Semicubierto, Palmera). TODOS = las tres juntas.
+  const [barra, setBarra] = useState(TODOS);
 
   // Estado local del formulario de ajuste de inventario: apertura y saldo real
   // contado, por producto. Se llenan a mano antes de guardar el ajuste.
@@ -88,16 +93,27 @@ export default function Reportes() {
   const textoFamilia = familiaActiva === TODOS ? "" : ` — ${familiaActiva}`;
   const sufijoFamilia = familiaActiva === TODOS ? "" : `-${familiaActiva.toLowerCase().replace(/\s+/g, "-")}`;
 
+  const barraDef = BARRAS.find((b) => b.valor === barra) || null;
+  const barraActiva = barraDef ? barraDef.valor : TODOS;
+  const textoBarra = barraDef ? ` — ${barraDef.etiqueta}` : "";
+  const sufijoBarra = barraDef ? `-${barraDef.valor}` : "";
+
   const ventasFiltradas = useMemo(
-    () => (familiaActiva === TODOS ? ventasEvento : ventasEvento.filter((v) => familiaDeVenta(v) === familiaActiva)),
+    () =>
+      ventasEvento
+        .filter((v) => familiaActiva === TODOS || familiaDeVenta(v) === familiaActiva)
+        .filter((v) => barraActiva === TODOS || v.barra === barraActiva),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ventasEvento, familiaActiva, productos]
+    [ventasEvento, familiaActiva, barraActiva, productos]
   );
 
   const lineasFiltradas = useMemo(
-    () => (familiaActiva === TODOS ? lineasEventoTodas : lineasEventoTodas.filter((v) => familiaDeVenta(v) === familiaActiva)),
+    () =>
+      lineasEventoTodas
+        .filter((v) => familiaActiva === TODOS || familiaDeVenta(v) === familiaActiva)
+        .filter((v) => barraActiva === TODOS || v.barra === barraActiva),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lineasEventoTodas, familiaActiva, productos]
+    [lineasEventoTodas, familiaActiva, barraActiva, productos]
   );
 
   // Las cortesías no son venta: no se suman a ningún total. Van en su propia pestaña.
@@ -151,10 +167,11 @@ export default function Reportes() {
         mapa[clave] = {
           producto: clave,
           cantidad: 0,
+          // Existencia (saldo): en la barra elegida, o en todo el bar (almacén + barras).
           existencia: v.recetaId
             ? "—"
             : productoInventario
-            ? stockTotal(productoInventario)
+            ? redondear(barraDef ? productoInventario[barraDef.campo] : stockTotal(productoInventario))
             : 0,
           total: 0,
         };
@@ -164,8 +181,10 @@ export default function Reportes() {
       mapa[clave].total += v.total;
     });
 
-    return Object.values(mapa).sort((a, b) => b.cantidad - a.cantidad);
-  }, [ventasPagadas, productos]);
+    return Object.values(mapa)
+      .map((f) => ({ ...f, cantidad: redondear(f.cantidad), total: redondear(f.total) }))
+      .sort((a, b) => b.cantidad - a.cantidad);
+  }, [ventasPagadas, productos, barraDef]);
 
   const saldos = useMemo(() => {
     const totalQr = ventasFiltradas.reduce((s, v) => s + (v.montoQr || 0), 0);
@@ -180,10 +199,10 @@ export default function Reportes() {
       .filter((p) => familiaActiva === TODOS || (p.familia || "Licores") === familiaActiva)
       .map((p) => {
       const precio = Number(p.precio) || 0;
-      const stockAlmacen = p.stock ?? 0;
-      const fila = { producto: p.nombre, almacen: stockAlmacen, valorAlmacen: stockAlmacen * precio, valorTotal: stockTotal(p) * precio };
+      const stockAlmacen = redondear(p.stock);
+      const fila = { producto: p.nombre, almacen: stockAlmacen, valorAlmacen: stockAlmacen * precio, valorTotal: redondear(stockTotal(p)) * precio };
       BARRAS.forEach((b) => {
-        const existencia = p[b.campo] ?? 0;
+        const existencia = redondear(p[b.campo]);
         fila[b.valor] = existencia;
         fila[`valor_${b.valor}`] = existencia * precio;
       });
@@ -277,11 +296,11 @@ export default function Reportes() {
 
   const filasAjuste = useMemo(() => {
     return productos.map((p) => {
-      const apertura = aperturas[p.id] !== undefined ? Number(aperturas[p.id]) || 0 : Number(p.stock) || 0;
-      const venta = ventaPorProducto[p.id] || 0;
-      const final = apertura - venta;
-      const saldo = saldosAjuste[p.id] !== undefined && saldosAjuste[p.id] !== "" ? Number(saldosAjuste[p.id]) : final;
-      const diferencia = final - saldo;
+      const apertura = redondear(aperturas[p.id] !== undefined ? Number(aperturas[p.id]) || 0 : Number(p.stock) || 0);
+      const venta = redondear(ventaPorProducto[p.id] || 0);
+      const final = redondear(apertura - venta);
+      const saldo = redondear(saldosAjuste[p.id] !== undefined && saldosAjuste[p.id] !== "" ? Number(saldosAjuste[p.id]) : final);
+      const diferencia = redondear(final - saldo);
       return {
         productoId: p.id,
         producto: p.nombre,
@@ -352,8 +371,8 @@ export default function Reportes() {
       titulo: "Por producto",
       columnas: [
         { titulo: "Producto", clave: "producto" },
-        { titulo: "Producto vendido", clave: "cantidad" },
-        { titulo: "Inventario en existencia", clave: "existencia" },
+        { titulo: "Cantidad vendida", clave: "cantidad" },
+        { titulo: barraDef ? `Saldo en ${barraDef.etiqueta}` : "Saldo en existencia (todo el bar)", clave: "existencia" },
         { titulo: "Total Bs", clave: "total" },
       ],
       filas: porProducto,
@@ -421,11 +440,11 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarCSV(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filasParaDescargar());
+    descargarCSV(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}${sufijoBarra}`, actual.columnas, filasParaDescargar());
   }
 
   function exportarExcel() {
-    descargarXLSX(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`, actual.columnas, filasParaDescargar(), actual.titulo);
+    descargarXLSX(`reporte-${vista}-${sufijoArchivo}${sufijoFamilia}${sufijoBarra}`, actual.columnas, filasParaDescargar(), actual.titulo);
   }
 
   function exportarPDF() {
@@ -435,7 +454,7 @@ export default function Reportes() {
       monto: f.monto?.toFixed ? f.monto.toFixed(2) : f.monto,
       precio: f.precio?.toFixed ? f.precio.toFixed(2) : f.precio,
     }));
-    descargarPDF(`${actual.titulo} — ${textoEvento}${textoFamilia}`, actual.columnas, filasParaDescargar(), `reporte-${vista}-${sufijoArchivo}${sufijoFamilia}`);
+    descargarPDF(`${actual.titulo} — ${textoEvento}${textoFamilia}${textoBarra}`, actual.columnas, filasParaDescargar(), `reporte-${vista}-${sufijoArchivo}${sufijoFamilia}${sufijoBarra}`);
   }
 
   function exportarAjusteCSV() {
@@ -534,6 +553,17 @@ export default function Reportes() {
             ))}
           </select>
         </label>
+        {vista !== "ajuste" && vista !== "inventario" && (
+          <label>
+            Barra
+            <select value={barraActiva} onChange={(e) => setBarra(e.target.value)}>
+              <option value={TODOS}>Todas las barras</option>
+              {BARRAS.map((b) => (
+                <option key={b.valor} value={b.valor}>{b.etiqueta}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {vista !== "ajuste" && (
           <label>
             Familia
@@ -564,7 +594,7 @@ export default function Reportes() {
 
       {vista !== "ajuste" && vista !== "inventario" && (
         <p className="texto-vacio" style={{ marginTop: -8 }}>
-          Control del evento{textoFamilia}: <strong>{resumenControl.comandas}</strong> comandas ·{" "}
+          Control del evento{textoFamilia}{textoBarra}: <strong>{resumenControl.comandas}</strong> comandas ·{" "}
           <strong>{resumenControl.lineas}</strong> líneas ({resumenControl.vendidas} vendidas, {resumenControl.cortesias} cortesías,{" "}
           {resumenControl.anuladas} anuladas) · Total vendido <strong>Bs {resumenControl.totalVendido.toFixed(2)}</strong>. Las anuladas y
           cortesías aparecen en «Comandas» con su estado y no suman.
@@ -715,7 +745,7 @@ export default function Reportes() {
                       <td>{a.evento || "—"}</td>
                       <td>{a.producto}</td>
                       <td>{Number(a.apertura ?? 0).toFixed(2)}</td>
-                      <td>{a.venta ?? 0}</td>
+                      <td>{Number(a.venta ?? 0).toFixed(2)}</td>
                       <td>{Number(a.final ?? 0).toFixed(2)}</td>
                       <td>{Number(a.saldo ?? 0).toFixed(2)}</td>
                       <td>{Number(a.diferencia ?? 0).toFixed(2)}</td>

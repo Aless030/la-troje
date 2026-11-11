@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { BARRAS, stockTotal } from "../utils/barras";
 
-const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Energizantes", "Vinos", "Comida"];
+const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Energizantes", "Vinos", "Comida", "Otros"];
 const UNIDADES_VENTA = ["Botella", "Vaso", "Lata", "Jarra", "Copa", "Shot", "Cántaro", "Porción"];
 const DESTINOS = [{ valor: "general", etiqueta: "Almacén general" }, ...BARRAS.map((b) => ({ valor: b.valor, etiqueta: b.etiqueta }))];
 
@@ -34,8 +35,9 @@ const VACIO = {
 const redondear4 = (n) => Math.round(Number(n || 0) * 10000) / 10000;
 
 // Celda de stock editable en la tabla (−, número, +). Se usa para Almacén y cada barra.
-function CeldaStock({ valor, onCambiar }) {
+function CeldaStock({ valor, onCambiar, soloVer }) {
   const actual = Number(valor || 0);
+  if (soloVer) return <span>{actual.toFixed(2)}</span>;
   return (
     <div className="ajuste-stock">
       <button type="button" onClick={() => onCambiar(Math.max(0, actual - 1))}>−</button>
@@ -58,6 +60,9 @@ function CeldaStock({ valor, onCambiar }) {
 
 export default function Inventario() {
   const { productos, comprasInventario, actualizarProducto, eliminarProducto, registrarCompra, ponerStockEnCero } = useData();
+  // La encargada de almacén ve la lista de productos pero no modifica ni elimina.
+  const { perfil } = useAuth();
+  const soloVer = perfil?.rol === "almacen";
   const [form, setForm] = useState(VACIO);
   const [error, setError] = useState("");
   const [avisoAuto, setAvisoAuto] = useState("");
@@ -652,16 +657,20 @@ export default function Inventario() {
         </div>
 
         <h2>Productos ({productosFiltrados.length})</h2>
-        <button
-          type="button"
-          className="boton boton--enlace boton--peligro"
-          onClick={reiniciarTodoEnCero}
-          disabled={productos.length === 0}
-        >
-          Poner todo el stock en 0
-        </button>
+        {!soloVer && (
+          <button
+            type="button"
+            className="boton boton--enlace boton--peligro"
+            onClick={reiniciarTodoEnCero}
+            disabled={productos.length === 0}
+          >
+            Poner todo el stock en 0
+          </button>
+        )}
         <p className="texto-vacio">
-          Puedes cambiar la cantidad de cada producto directo en la tabla, por ubicación: Almacén, Interior, Semicubierto o Palmera.
+          {soloVer
+            ? "Lista de productos solo para consultar. Para mover mercadería usa Distribución."
+            : "Puedes cambiar la cantidad de cada producto directo en la tabla, por ubicación: Almacén, Interior, Semicubierto o Palmera."}
         </p>
         {productosFiltrados.length === 0 ? (
           <p className="texto-vacio">
@@ -680,8 +689,8 @@ export default function Inventario() {
                 <th>Interior</th>
                 <th>Semicubierto</th>
                 <th>Palmera</th>
-                <th></th>
-                <th></th>
+                {!soloVer && <th></th>}
+                {!soloVer && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -695,6 +704,9 @@ export default function Inventario() {
                   <td className="tabla__etiqueta">{p.unidadVenta || "Botella"}</td>
                   <td>Bs {Number(p.precio || 0).toFixed(2)}</td>
                   <td>
+                    {soloVer ? (
+                      <span>Bs {Number(p.precioVenta ?? p.precio ?? 0).toFixed(2)}</span>
+                    ) : (
                     <input
                       key={`precioVenta-${p.id}-${p.precioVenta}`}
                       type="text"
@@ -715,22 +727,27 @@ export default function Inventario() {
                         }
                       }}
                     />
+                    )}
                   </td>
-                  <td><CeldaStock valor={p.stock} onCambiar={(n) => guardarStock(p, "stock", n)} /></td>
-                  <td><CeldaStock valor={p.stockInterior} onCambiar={(n) => guardarStock(p, "stockInterior", n)} /></td>
-                  <td><CeldaStock valor={p.stockSemicubierto} onCambiar={(n) => guardarStock(p, "stockSemicubierto", n)} /></td>
-                  <td><CeldaStock valor={p.stockPalmera} onCambiar={(n) => guardarStock(p, "stockPalmera", n)} /></td>
-                  <td>
-                    <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
-                  </td>
-                  <td>
-                    <button
-                      className="boton boton--enlace boton--peligro"
-                      onClick={() => eliminarProducto(p.id)}
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+                  <td><CeldaStock soloVer={soloVer} valor={p.stock} onCambiar={(n) => guardarStock(p, "stock", n)} /></td>
+                  <td><CeldaStock soloVer={soloVer} valor={p.stockInterior} onCambiar={(n) => guardarStock(p, "stockInterior", n)} /></td>
+                  <td><CeldaStock soloVer={soloVer} valor={p.stockSemicubierto} onCambiar={(n) => guardarStock(p, "stockSemicubierto", n)} /></td>
+                  <td><CeldaStock soloVer={soloVer} valor={p.stockPalmera} onCambiar={(n) => guardarStock(p, "stockPalmera", n)} /></td>
+                  {!soloVer && (
+                    <td>
+                      <button className="boton boton--enlace" onClick={() => editar(p)}>Editar</button>
+                    </td>
+                  )}
+                  {!soloVer && (
+                    <td>
+                      <button
+                        className="boton boton--enlace boton--peligro"
+                        onClick={() => eliminarProducto(p.id)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -798,7 +815,7 @@ export default function Inventario() {
                   <td className="tabla__etiqueta">
                     {DESTINOS.find((d) => d.valor === c.destino)?.etiqueta || c.destino}
                   </td>
-                  <td>{c.cantidad}</td>
+                  <td>{Number((Number(c.cantidad) || 0).toFixed(2))}</td>
                   <td>{c.factura || "—"}</td>
                 </tr>
               ))}
