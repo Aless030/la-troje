@@ -18,7 +18,7 @@ export const ROLES = {
   },
   almacen: {
     etiqueta: "Encargada de almacén",
-    vistas: ["menu", "inventario", "ventas", "distribucion"],
+    vistas: ["menu", "inventario", "distribucion", "reportes"],
   },
   administrador: {
     etiqueta: "Administrador",
