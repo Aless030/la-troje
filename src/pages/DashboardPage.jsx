@@ -103,7 +103,7 @@ export default function DashboardPage() {
 
   // Ventas reales (sin anuladas ni cortesías), cortesías y anuladas del histórico.
   const lineas = useMemo(() => sinAnuladas.filter((v) => v.formaPago !== "cortesia"), [sinAnuladas]);
-  const cortesiasTodas = useMemo(() => sinAnuladas.filter((v) => v.formaPago === "cortesia"), [sinAnuladas]);
+  const cortesiasTodas = useMemo(() => sinAnuladas.filter((v) => v.formaPago === "cortesia" || Number(v.valorCortesia) > 0), [sinAnuladas]);
   const anuladasTodas = useMemo(() => ventasTodas.filter((v) => v.anulada), [ventasTodas]);
 
   // Costo de producto de una línea vendida (precio de compra × lo que se gastó del inventario).
@@ -235,7 +235,12 @@ export default function DashboardPage() {
   // Alertas de control (de lo que se ve en pantalla).
   const control = useMemo(() => {
     const valorCortesias = cortesias.reduce((s, v) => s + Number(v.valorCortesia || 0), 0);
-    const costoCortesias = cortesias.reduce((s, v) => s + costoDeLinea(v), 0);
+    const costoCortesias = cortesias.reduce((s, v) => {
+      // En una comanda con parte cobrada y parte cortesía, solo cuenta la fracción regalada.
+      const valor = Number(v.valorCortesia || 0);
+      const parte = v.formaPago === "cortesia" || valor + Number(v.total || 0) <= 0 ? 1 : valor / (valor + Number(v.total || 0));
+      return s + costoDeLinea(v) * parte;
+    }, 0);
     return {
       cortesias: cortesias.length,
       valorCortesias,

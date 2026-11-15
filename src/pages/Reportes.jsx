@@ -122,7 +122,7 @@ export default function Reportes() {
     [ventasFiltradas]
   );
   const ventasCortesia = useMemo(
-    () => ventasFiltradas.filter((v) => v.formaPago === "cortesia"),
+    () => ventasFiltradas.filter((v) => v.formaPago === "cortesia" || Number(v.valorCortesia) > 0),
     [ventasFiltradas]
   );
 
@@ -243,6 +243,8 @@ export default function Reportes() {
           ? `Anulada${v.anuladaPor ? " por " + v.anuladaPor : ""}${v.motivoAnulacion ? ": " + v.motivoAnulacion : ""} (Bs ${Number(v.total || 0).toFixed(2)})`
           : v.formaPago === "cortesia"
           ? `Valor Bs ${Number(v.valorCortesia || 0).toFixed(2)}${v.observaciones ? " — " + v.observaciones : ""}`
+          : Number(v.valorCortesia) > 0
+          ? `Incluye cortesía de Bs ${Number(v.valorCortesia).toFixed(2)}${v.observaciones ? " — " + v.observaciones : ""}`
           : v.observaciones || "",
       };
     });
@@ -272,8 +274,8 @@ export default function Reportes() {
       producto: v.producto,
       cantidad: v.cantidad,
       unidad: v.unidad || "—",
-      precio: v.precioUnitario,
-      observaciones: v.observaciones || "—",
+      precio: v.formaPago === "cortesia" ? v.precioUnitario : Number(v.valorCortesia) / (Number(v.cantidad) || 1),
+      observaciones: v.formaPago === "cortesia" ? v.observaciones || "—" : `Parte cortesía de una comanda cobrada: Bs ${Number(v.valorCortesia).toFixed(2)}${v.observaciones ? " — " + v.observaciones : ""}`,
     }));
   }, [ventasCortesia]);
 

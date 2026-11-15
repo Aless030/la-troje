@@ -26,6 +26,7 @@ const VACIO = {
   formaPago: "efectivo",
   montoQr: "",
   montoEfectivo: "",
+  montoCortesia: "",
   observaciones: "",
   complemento: "",
 };
@@ -630,31 +631,45 @@ export default function Ventas() {
 
     let montoQrTotal = 0;
     let montoEfectivoTotal = 0;
+    let montoCortesiaTotal = 0;
     if (form.formaPago === "qr") montoQrTotal = totalARegistrar;
     if (form.formaPago === "efectivo") montoEfectivoTotal = totalARegistrar;
     if (form.formaPago === "ambos") {
       montoQrTotal = Number(form.montoQr) || 0;
       montoEfectivoTotal = Number(form.montoEfectivo) || 0;
-      if (Math.abs(montoQrTotal + montoEfectivoTotal - totalARegistrar) > 0.01) {
-        return setError(`La suma de QR (Bs ${montoQrTotal.toFixed(2)}) + efectivo (Bs ${montoEfectivoTotal.toFixed(2)}) debe ser igual al total (Bs ${totalARegistrar.toFixed(2)}).`);
+      montoCortesiaTotal = Number(form.montoCortesia) || 0;
+      if (montoQrTotal < 0 || montoEfectivoTotal < 0 || montoCortesiaTotal < 0) {
+        return setError("Los montos no pueden ser negativos.");
+      }
+      if (Math.abs(montoQrTotal + montoEfectivoTotal + montoCortesiaTotal - totalARegistrar) > 0.01) {
+        return setError(`La suma de QR (Bs ${montoQrTotal.toFixed(2)}) + efectivo (Bs ${montoEfectivoTotal.toFixed(2)}) + cortesía (Bs ${montoCortesiaTotal.toFixed(2)}) debe ser igual al total (Bs ${totalARegistrar.toFixed(2)}).`);
       }
     }
 
     setEnviando(true);
     try {
       let qrRestante = montoQrTotal;
+      let cortesiaRestante = montoCortesiaTotal;
       for (const item of productosARegistrar) {
         let montoQr = 0;
         let montoEfectivo = 0;
+        // Parte de esta línea que va de cortesía (solo en pago «Ambos» con monto cortesía).
+        let cortesiaLinea = 0;
         if (form.formaPago === "qr") montoQr = item.total;
         else if (form.formaPago === "efectivo") montoEfectivo = item.total;
         else if (form.formaPago === "cortesia") {
           // Cortesía: no entra dinero, ni QR ni efectivo.
         } else {
-          montoQr = Math.min(qrRestante, item.total);
-          montoEfectivo = item.total - montoQr;
+          cortesiaLinea = Math.min(cortesiaRestante, item.total);
+          cortesiaRestante -= cortesiaLinea;
+          const cobrar = item.total - cortesiaLinea;
+          montoQr = Math.min(qrRestante, cobrar);
+          montoEfectivo = cobrar - montoQr;
           qrRestante -= montoQr;
         }
+        // Si toda la línea quedó de cortesía, se guarda como cortesía.
+        const lineaTodaCortesia = esCortesia || (cortesiaLinea > 0 && item.total - cortesiaLinea < 0.005);
+        const valorCortesiaLinea = esCortesia ? item.total : cortesiaLinea;
 
         await registrarVenta({
           fecha: fechaHoyISO(), cajera: aperturaActiva.cajera, comanda: form.comanda.trim(),
@@ -663,9 +678,9 @@ export default function Ventas() {
           producto: item.producto, unidad: item.unidad, cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
           // En cortesía el total es 0 (no se suma a nada); el precio de la botella queda en valorCortesia solo para consulta.
-          total: esCortesia ? 0 : item.total,
-          valorCortesia: esCortesia ? item.total : 0,
-          formaPago: form.formaPago,
+          total: lineaTodaCortesia ? 0 : Math.round((item.total - cortesiaLinea) * 100) / 100,
+          valorCortesia: Math.round(valorCortesiaLinea * 100) / 100,
+          formaPago: lineaTodaCortesia ? "cortesia" : form.formaPago,
           montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
           complemento: item.complemento, aperturaId: aperturaActiva.id,
           recetaId: item.recetaId || null,
@@ -945,6 +960,8 @@ export default function Ventas() {
         <div className="formulario__total">
           {esCortesia
             ? `Cortesía — valor de referencia: Bs ${totalVentaActual.toFixed(2)} (no se cobra)`
+            : form.formaPago === "ambos"
+            ? `Total comanda: Bs ${totalVentaActual.toFixed(2)} · falta asignar: Bs ${(totalVentaActual - (Number(form.montoQr) || 0) - (Number(form.montoEfectivo) || 0) - (Number(form.montoCortesia) || 0)).toFixed(2)}`
             : `Total comanda: Bs ${totalVentaActual.toFixed(2)}`}
         </div>
 
@@ -979,6 +996,17 @@ export default function Ventas() {
                   step="0.01"
                   value={form.montoEfectivo}
                   onChange={(e) => actualizar("montoEfectivo", e.target.value)}
+                />
+              </label>
+              <label>
+                Monto cortesía
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.montoCortesia}
+                  onChange={(e) => actualizar("montoCortesia", e.target.value)}
+                  placeholder="0"
                 />
               </label>
             </>
@@ -1111,7 +1139,7 @@ export default function Ventas() {
                     <td>
                       {v.formaPago === "cortesia"
                         ? `Cortesía (Bs ${Number(v.valorCortesia || 0).toFixed(2)})`
-                        : `Bs ${Number(v.total).toFixed(2)}`}
+                        : `Bs ${Number(v.total).toFixed(2)}${Number(v.valorCortesia) > 0 ? ` + cortesía Bs ${Number(v.valorCortesia).toFixed(2)}` : ""}`}
                     </td>
                     <td className="tabla__etiqueta">{v.anulada ? "ANULADA" : v.formaPago}</td>
                     {puedeAnularVentas && (

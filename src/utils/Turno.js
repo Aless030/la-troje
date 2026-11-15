@@ -55,7 +55,7 @@ export function diaDeFecha(fechaIso) {
 export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = new Date().toISOString() }) {
   const delTurno = ventas.filter((v) => v.aperturaId === apertura.id);
   const pagadas = delTurno.filter((v) => v.formaPago !== "cortesia");
-  const cortesias = delTurno.filter((v) => v.formaPago === "cortesia");
+  const cortesias = delTurno.filter((v) => v.formaPago === "cortesia" || Number(v.valorCortesia) > 0);
   const gastos = gastosCaja.filter((g) => g.aperturaId === apertura.id);
   const evento = eventoDeApertura(apertura);
 
@@ -116,7 +116,8 @@ export function construirCierre({ apertura, ventas, gastosCaja, fechaCierre = ne
       mesero: v.mesero || "",
       producto: v.producto,
       cantidad: Number(v.cantidad || 0),
-      precio: Number(v.precioUnitario || 0),
+      // Si solo una parte de la comanda fue cortesía, se muestra el valor regalado por unidad.
+      precio: v.formaPago === "cortesia" ? Number(v.precioUnitario || 0) : Number(v.valorCortesia || 0) / (Number(v.cantidad) || 1),
     })),
   };
 }
