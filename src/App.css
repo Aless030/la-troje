@@ -2209,3 +2209,18 @@ input[type="time"] {
 .dash-horas__pico .dash-horas__barra { background: #E0A030; }
 .dash-horas__pico .dash-horas__hora::after { content: " ★"; color: #E0A030; }
 @media (max-width: 560px) { .dash-horas li { grid-template-columns: 96px minmax(0, 1fr) auto; gap: 8px; font-size: 12.5px; } }
+
+/* --- Selector de producto con búsqueda --- */
+.selector-producto { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 260px; }
+.selector-producto__etiqueta { font-size: 14px; font-weight: 600; }
+.selector-producto input { width: 100%; min-height: 48px; font-size: 16px; }
+.selector-producto__lista { position: absolute; z-index: 30; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid #CBD5E1; border-radius: 12px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); }
+.selector-producto__lista button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 0; background: transparent; border-radius: 8px; font-size: 15px; text-align: left; cursor: pointer; color: #1F2937; }
+.selector-producto__lista button.activo, .selector-producto__lista button:hover { background: #EEF3FD; }
+.selector-producto__lista small { color: #64748B; white-space: nowrap; font-size: 12.5px; }
+.selector-producto__lista mark { background: #FDE9B8; color: inherit; border-radius: 3px; padding: 0 1px; }
+.selector-producto__vacio { padding: 14px; color: #64748B; font-size: 14px; }
+.selector-producto__cuenta { font-size: 12px; color: #64748B; }
+.selector-producto__elegido { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border: 1px solid #3B6CD4; background: #EEF3FD; border-radius: 10px; }
+.selector-producto__elegido small { display: block; color: #475569; font-size: 12.5px; }
+.selector-producto__elegido button { border: 0; background: transparent; color: #3B6CD4; font-weight: 700; cursor: pointer; padding: 8px; }

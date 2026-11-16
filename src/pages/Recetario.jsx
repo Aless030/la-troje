@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
+import SelectorProducto from "../components/SelectorProducto";
 import { DOSIS_CASA, consumoIngrediente, volumenEnMl } from "../utils/Dosiscasa";
 
 const UNIDADES = [
@@ -197,18 +198,12 @@ export default function Recetario() {
           const descuenta = consumoIngrediente(producto, Number(ing.cantidad) || 0, ing.unidad);
           return (
             <div className="formulario__fila" key={i}>
-              <label>
-                Producto
-                <select
-                  value={ing.productoId}
-                  onChange={(e) => actualizarIngrediente(i, "productoId", e.target.value)}
-                >
-                  <option value="">Selecciona…</option>
-                  {productos.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                  ))}
-                </select>
-              </label>
+              <SelectorProducto
+                etiqueta="Producto"
+                value={ing.productoId}
+                onChange={(id) => actualizarIngrediente(i, "productoId", id)}
+                opciones={productos.map((p) => ({ id: p.id, nombre: p.nombre, detalle: p.familia || "" }))}
+              />
               <label>
                 Cantidad
                 <input

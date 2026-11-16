@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { BARRAS, campoBarra, etiquetaBarra } from "../utils/barras";
+import SelectorProducto from "../components/SelectorProducto";
 
 const ACCIONES = [
   { valor: "ingreso", etiqueta: "Ingreso" },
@@ -193,17 +194,18 @@ export default function Distribucion() {
         </p>
 
         <div className="formulario__fila">
-          <label>
-            Producto
-            <select value={productoId} onChange={(e) => setProductoId(e.target.value)} required>
-              <option value="">Selecciona un producto…</option>
-              {productosDisponibles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre} — disponible: {formatearStock(accionActiva === "ingreso" ? p.stock : p[campoActivo])}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectorProducto
+            etiqueta="Producto (escribe para buscar)"
+            value={productoId}
+            onChange={setProductoId}
+            opciones={productosDisponibles.map((p) => ({
+              id: p.id,
+              nombre: p.nombre,
+              detalle: `disponible: ${formatearStock(accionActiva === "ingreso" ? p.stock : p[campoActivo])}`,
+            }))}
+            placeholder={accionActiva === "ingreso" ? "Ej: fernet, paceña…" : `Productos con stock en ${etiquetaBarra(barraActiva)}…`}
+            vacio={accionActiva === "ingreso" ? "Ningún producto con stock en almacén coincide." : `Ningún producto con stock en ${etiquetaBarra(barraActiva)} coincide.`}
+          />
           <label>
             Cantidad
             <input
