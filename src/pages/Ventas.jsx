@@ -328,7 +328,15 @@ export default function Ventas() {
       const dosis = dosisPorBotella(p);
       return dosis > 0 ? [{ productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) / dosis }] : [];
     }
-    return [{ productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) }];
+    const principal = { productoId: linea.productoId, cantidad: Number(linea.cantidad || 0) };
+    // Botella con acompañante (Fernet → Coca Cola, etc.): se descuenta también el acompañante.
+    // `opcional`: si no hay stock del acompañante, la venta no se bloquea.
+    const p = productos.find((x) => x.id === linea.productoId);
+    if (p?.acompananteId && p.acompananteId !== p.id) {
+      const por = Number(p.acompananteCantidad) || 1;
+      return [principal, { productoId: p.acompananteId, cantidad: principal.cantidad * por, opcional: true }];
+    }
+    return [principal];
   }
 
   // Revisa que alcance el inventario de la barra para todas las líneas juntas.
@@ -336,6 +344,7 @@ export default function Ventas() {
     const total = {};
     lineas.forEach((l) =>
       consumoDeLinea(l).forEach((c) => {
+        if (c.opcional) return;
         total[c.productoId] = (total[c.productoId] || 0) + c.cantidad;
       })
     );
@@ -684,7 +693,7 @@ export default function Ventas() {
           montoQr, montoEfectivo, observaciones: form.observaciones.trim(),
           complemento: item.complemento, aperturaId: aperturaActiva.id,
           recetaId: item.recetaId || null,
-          consumo: item.recetaId || item.unidad === "Vaso"
+          consumo: item.recetaId || item.unidad === "Vaso" || consumoDeLinea(item).length > 1
             ? consumoDeLinea(item).map((c) => ({ productoId: c.productoId, cantidad: redondear4(c.cantidad) }))
             : [],
         });

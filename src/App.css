@@ -2224,3 +2224,13 @@ input[type="time"] {
 .selector-producto__elegido { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border: 1px solid #3B6CD4; background: #EEF3FD; border-radius: 10px; }
 .selector-producto__elegido small { display: block; color: #475569; font-size: 12.5px; }
 .selector-producto__elegido button { border: 0; background: transparent; color: #3B6CD4; font-weight: 700; cursor: pointer; padding: 8px; }
+
+/* --- Acompañantes --- */
+.acomp__sugeridos { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 16px; margin: 12px 0 16px; }
+.acomp__sugeridos p { margin: 0 0 8px; }
+.acomp__lista { display: grid; gap: 10px; margin-top: 12px; }
+.acomp__fila { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; padding: 12px; border: 1px solid #E2E8F0; border-radius: 12px; background: #fff; }
+.acomp__fila > strong { align-self: center; }
+.acomp__cant { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.acomp__cant input { width: 110px; min-height: 48px; }
+@media (max-width: 700px) { .acomp__fila { grid-template-columns: 1fr; } .acomp__cant input { width: 100%; } }

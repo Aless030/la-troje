@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
+import Acompanantes from "../components/Acompanantes";
 import { BARRAS, stockTotal } from "../utils/barras";
 
 const FAMILIAS = ["Licores", "Cervezas", "Refrescos", "Energizantes", "Vinos", "Comida", "Otros"];
@@ -757,6 +758,8 @@ export default function Inventario() {
           <strong>Total del inventario a precio de compra:</strong> Bs {valorTotalCompra.toFixed(2)}
         </div>
       </section>
+
+      {!soloVer && <Acompanantes />}
 
       <section className="lista-reciente">
         <h2>{hayFiltroCompras ? `Compras registradas (${comprasFiltradas.length})` : "Últimas compras registradas"}</h2>
