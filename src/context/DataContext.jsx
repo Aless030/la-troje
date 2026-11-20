@@ -177,8 +177,11 @@ export function DataProvider({ children }) {
       porProducto[c.productoId] = (porProducto[c.productoId] || 0) + Number(c.cantidad || 0);
     });
     const ids = Object.keys(porProducto);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return [];
+    // Lo que realmente se descontó (si no había suficiente, queda en 0 y se descuenta menos).
+    let reales = [];
     await runTransaction(db, async (tx) => {
+      reales = [];
       const refs = ids.map((id) => doc(db, "productos", id));
       const snaps = await Promise.all(refs.map((r) => tx.get(r)));
       snaps.forEach((snap, i) => {
@@ -186,14 +189,16 @@ export function DataProvider({ children }) {
         const actual = Number(snap.data()[campo] || 0);
         const nuevo = Math.max(0, Math.round((actual - porProducto[ids[i]]) * 10000) / 10000);
         tx.update(refs[i], { [campo]: nuevo });
+        reales.push({ productoId: ids[i], cantidad: Math.round((actual - nuevo) * 10000) / 10000, pedido: porProducto[ids[i]] });
       });
     });
+    return reales;
   }
 
   // Un producto normal descuenta su cantidad; un trago (venta.consumo) descuenta
   // cada ingrediente de su receta.
   async function registrarVenta(venta) {
-    await addDoc(collection(db, "ventas"), {
+    const ref = await addDoc(collection(db, "ventas"), {
       ...venta,
       creadoEn: serverTimestamp(),
     });
@@ -201,7 +206,12 @@ export function DataProvider({ children }) {
       Array.isArray(venta.consumo) && venta.consumo.length > 0
         ? venta.consumo
         : [{ productoId: venta.productoId, cantidad: venta.cantidad }];
-    await descontarStock(consumos, venta.barra);
+    const reales = await descontarStock(consumos, venta.barra);
+    // Si faltó stock y se descontó menos de lo pedido, se guarda lo real en la venta:
+    // así, al anular, se devuelve exactamente lo que salió y el inventario no se infla.
+    if (reales.some((r) => r.cantidad + 1e-9 < r.pedido)) {
+      await updateDoc(ref, { consumo: reales.map((r) => ({ productoId: r.productoId, cantidad: r.cantidad })) });
+    }
   }
 
   // Anula una o varias ventas (las líneas de una comanda): quedan marcadas como
