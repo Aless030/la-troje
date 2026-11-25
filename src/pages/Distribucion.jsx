@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useData } from "../context/DataContext";
 import { BARRAS, campoBarra, etiquetaBarra } from "../utils/barras";
 import SelectorProducto from "../components/SelectorProducto";
+import { descargarChecklistPDF, descargarPDF } from "../utils/pdf";
+import { descargarXLSX } from "../utils/xlsx";
 
 const ACCIONES = [
   { valor: "ingreso", etiqueta: "Ingreso" },
@@ -29,6 +31,85 @@ export default function Distribucion() {
   const [busqueda, setBusqueda] = useState("");
 
   const campoActivo = campoBarra(barraActiva);
+
+  // --- Descargas para imprimir / checklist físico ---
+  const redondear = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const hoyTxt = () => new Date().toLocaleDateString("es-BO");
+  const nombreBase = () => `distribucion-${new Date().toISOString().slice(0, 10)}`;
+
+  // Una fila por producto con el stock de todas las ubicaciones y columnas en blanco para escribir.
+  function filasChecklist() {
+    return [...productosFiltrados]
+      .sort((a, b) => (a.familia || "").localeCompare(b.familia || "", "es") || (a.nombre || "").localeCompare(b.nombre || "", "es"))
+      .map((p) => {
+        const fila = { marca: "", producto: p.nombre, familia: p.familia || "", almacen: redondear(p.stock) };
+        let total = redondear(p.stock);
+        BARRAS.forEach((b) => {
+          fila[b.valor] = redondear(p[b.campo]);
+          total += redondear(p[b.campo]);
+        });
+        fila.total = redondear(total);
+        fila.pasar = "";
+        fila.conteo = "";
+        fila.obs = "";
+        return fila;
+      });
+  }
+  function columnasChecklist(paraPdf) {
+    return [
+      { titulo: paraPdf ? "OK" : "✓", clave: "marca", peso: 0.5, caja: true },
+      { titulo: "Producto", clave: "producto", peso: 3.2 },
+      { titulo: "Almacén", clave: "almacen", peso: 1 },
+      ...BARRAS.map((b) => ({ titulo: b.etiqueta, clave: b.valor, peso: 1.35 })),
+      { titulo: "Total", clave: "total", peso: 0.9 },
+      { titulo: "Cantidad a pasar", clave: "pasar", peso: 1.6, blanco: true },
+      { titulo: "Conteo físico", clave: "conteo", peso: 1.3, blanco: true },
+      { titulo: "Observaciones", clave: "obs", peso: 2.2, blanco: true },
+    ];
+  }
+  function descargarChecklist(formato) {
+    const filas = filasChecklist();
+    if (filas.length === 0) return;
+    if (formato === "pdf") {
+      descargarChecklistPDF({
+        titulo: "Checklist de distribución",
+        subtitulo: `Stock al ${hoyTxt()} — ${filas.length} productos`,
+        columnas: columnasChecklist(true),
+        filas,
+        nombreArchivo: `checklist-${nombreBase()}`,
+      });
+    } else {
+      descargarXLSX(
+        `checklist-${nombreBase()}`,
+        columnasChecklist(false).map((c) => ({ ...c, titulo: c.clave === "marca" ? "✓" : c.titulo })),
+        filas.map((f) => ({ ...f, marca: "☐" })),
+        "Checklist"
+      );
+    }
+  }
+  function filasHistorial() {
+    return historial.map((m) => ({
+      fecha: new Date(m.fecha).toLocaleDateString("es-BO"),
+      accion: ACCIONES.find((a) => a.valor === m.tipo)?.etiqueta || m.tipo,
+      producto: m.producto,
+      cantidad: redondear(m.cantidad),
+      detalle:
+        m.tipo === "traspaso"
+          ? m.destino === barraActiva && m.barra !== barraActiva
+            ? `Desde ${etiquetaBarra(m.barra)}`
+            : `Hacia ${etiquetaBarra(m.destino)}`
+          : m.tipo === "baja"
+          ? m.motivo || "—"
+          : "Desde almacén",
+    }));
+  }
+  const COLUMNAS_HISTORIAL = [
+    { titulo: "Fecha", clave: "fecha" },
+    { titulo: "Acción", clave: "accion" },
+    { titulo: "Producto", clave: "producto" },
+    { titulo: "Cantidad", clave: "cantidad" },
+    { titulo: "Detalle", clave: "detalle" },
+  ];
   const barrasDestino = BARRAS.filter((b) => b.valor !== barraActiva);
   const destino = barrasDestino.some((b) => b.valor === destinoElegido) ? destinoElegido : barrasDestino[0]?.valor;
 
@@ -138,6 +219,17 @@ export default function Distribucion() {
 
       <section className="lista-reciente">
         <h2>Almacén general</h2>
+        <div className="formulario__acciones">
+          <button type="button" className="boton" onClick={() => descargarChecklist("pdf")} disabled={productosFiltrados.length === 0}>
+            Descargar checklist PDF (imprimir)
+          </button>
+          <button type="button" className="boton" onClick={() => descargarChecklist("xlsx")} disabled={productosFiltrados.length === 0}>
+            Descargar checklist Excel
+          </button>
+        </div>
+        <p className="texto-vacio">
+          El checklist trae todos los productos con su stock en almacén y en las 3 barras, más casillas y columnas en blanco para escribir a mano. Si buscas un producto, solo baja los que se ven.
+        </p>
         <div className="formulario__fila">
           <label>
             Buscar producto
@@ -250,6 +342,16 @@ export default function Distribucion() {
 
       <section className="lista-reciente">
         <h2>Historial en {etiquetaBarra(barraActiva)}</h2>
+        {historial.length > 0 && (
+          <div className="formulario__acciones">
+            <button type="button" className="boton" onClick={() => descargarPDF(`Historial de distribución — ${etiquetaBarra(barraActiva)}`, COLUMNAS_HISTORIAL, filasHistorial(), `historial-distribucion-${barraActiva}-${new Date().toISOString().slice(0, 10)}`)}>
+              Descargar PDF
+            </button>
+            <button type="button" className="boton" onClick={() => descargarXLSX(`historial-distribucion-${barraActiva}-${new Date().toISOString().slice(0, 10)}`, COLUMNAS_HISTORIAL, filasHistorial(), "Historial")}>
+              Descargar Excel
+            </button>
+          </div>
+        )}
         {historial.length === 0 ? (
           <p className="texto-vacio">Todavía no hay movimientos en esta barra.</p>
         ) : (

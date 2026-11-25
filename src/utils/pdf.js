@@ -77,6 +77,87 @@ export function descargarPDF(titulo, columnas, filas, nombreArchivo) {
   doc.save(nombreArchivo.endsWith(".pdf") ? nombreArchivo : `${nombreArchivo}.pdf`);
 }
 
+// Lista para imprimir y llenar a mano (checklist físico): hoja horizontal, filas altas con
+// bordes, casilla para marcar y columnas en blanco para escribir. El encabezado se repite en cada página.
+// columnas: [{ titulo, clave, peso, caja?: true, blanco?: true }]
+export function descargarChecklistPDF({ titulo, subtitulo = "", columnas, filas, nombreArchivo }) {
+  const doc = new jsPDF({ unit: "pt", orientation: "landscape" });
+  const ancho = doc.internal.pageSize.getWidth();
+  const alto = doc.internal.pageSize.getHeight();
+  const margen = 30;
+  const derecha = ancho - margen;
+  const fuente = 9;
+  const altoFila = 24;
+  const util = derecha - margen;
+  const sumaPesos = columnas.reduce((a, c) => a + (c.peso || 1), 0);
+  const anchos = columnas.map((c) => (util * (c.peso || 1)) / sumaPesos);
+  const xs = anchos.reduce((acc, w, i) => [...acc, i === 0 ? margen : acc[i - 1] + anchos[i - 1]], []);
+  let y = 0;
+
+  const encabezadoPagina = () => {
+    y = 40;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(0);
+    doc.text("LA TROJE", margen, y);
+    doc.setFontSize(11);
+    doc.text(titulo, margen + 95, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(subtitulo, derecha, y, { align: "right" });
+    doc.setTextColor(0);
+    y += 12;
+    doc.text("Fecha: ____ / ____ / ________      Preparó: ______________________      Revisó: ______________________", margen, y + 8);
+    y += 24;
+    // Encabezado de la tabla
+    doc.setFillColor(30, 41, 59);
+    doc.rect(margen, y, util, 30, "F");
+    doc.setTextColor(255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fuente);
+    columnas.forEach((c, i) => doc.text(doc.splitTextToSize(String(c.titulo), anchos[i] - 6), xs[i] + 4, y + 12));
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "normal");
+    y += 30;
+  };
+
+  encabezadoPagina();
+  filas.forEach((fila, n) => {
+    if (y + altoFila > alto - 36) {
+      doc.addPage();
+      encabezadoPagina();
+    }
+    if (n % 2 === 1) {
+      doc.setFillColor(244, 246, 250);
+      doc.rect(margen, y, util, altoFila, "F");
+    }
+    doc.setDrawColor(170);
+    doc.setLineWidth(0.5);
+    doc.rect(margen, y, util, altoFila);
+    columnas.forEach((c, i) => {
+      if (i > 0) doc.line(xs[i], y, xs[i], y + altoFila);
+      if (c.caja) {
+        doc.rect(xs[i] + anchos[i] / 2 - 6, y + altoFila / 2 - 6, 12, 12);
+      } else if (!c.blanco) {
+        const t = doc.splitTextToSize(String(fila[c.clave] ?? ""), anchos[i] - 8);
+        doc.text(t.slice(0, 2), xs[i] + 4, y + (t.length > 1 ? 10 : 15));
+      }
+    });
+    y += altoFila;
+  });
+
+  const paginas = doc.getNumberOfPages();
+  for (let k = 1; k <= paginas; k++) {
+    doc.setPage(k);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(`Página ${k} de ${paginas}`, derecha, alto - 16, { align: "right" });
+    doc.setTextColor(0);
+  }
+  doc.save(nombreArchivo.endsWith(".pdf") ? nombreArchivo : `${nombreArchivo}.pdf`);
+}
+
 const fmtBs = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
 
 // Reporte de cierre de caja de una cajera (un turno).
